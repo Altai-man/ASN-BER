@@ -1,25 +1,13 @@
 use ASN::Types;
 
 class Serializator {
-    multi method serialize(Int $index, $common where $common.HOW ~~ Metamodel::EnumHOW, TagClass $class) {
-        Buf.new($index, 1, $common.^enum_values.Hash{$common});
-    }
+    #| Types map:
+    #| INTEGER -> Int
+    #| UTF8String -> Str
+    #| SEQUENCE -> Array
+    #| ENUMERATED -> enum
 
-    method serialize-choice(Int $index, $common, $choice-of, TagClass $class) {
-        # It is a complex type, so plus 0b10100000
-        my $inner-index = 0x80; # Starting number for inner structures.
-        my $common-key = $common.key;
-        for @$choice-of -> $key {
-            if $key.key eq $common-key {
-                last
-            } else {
-                $inner-index++;
-            }
-        }
-        my $inner = self.serialize($inner-index, $common.value, $class);
-        Buf.new($index +| 0x20, $inner.elems, |$inner);
-    }
-
+    # INTEGER
     multi method serialize(Int $index, Int $int is copy where $int.HOW ~~ Metamodel::ClassHOW, TagClass $class) {
         my $int-encoded = Buf.new;
         my $bit-shift-value = 0;
@@ -38,6 +26,21 @@ class Serializator {
         Buf.new($index, $int-encoded.elems, |$int-encoded.reverse);
     }
 
+    # ENUMERATED
+    multi method serialize(Int $index, $common where $common.HOW ~~ Metamodel::EnumHOW, TagClass $class) {
+        Buf.new($index, 1, $common.^enum_values.Hash{$common});
+    }
+
+    # UTF8String
+    multi method serialize(Int $index, Str $str, TagClass $class) {
+        my $delta = do given $class {
+            when Application { 12 }
+            when Context { 0 }
+        }
+        Buf.new($index +| $delta, $str.chars, |$str.encode);
+    }
+
+    # SEQUENCE
     multi method serialize(Int $index, Array $sequence, TagClass $class) {
         my $delta = do given $class {
             when Application {
@@ -63,6 +66,8 @@ class Serializator {
         Buf.new(|$result, $temp.elems, |$temp);
     }
 
+    # Common method to enforce custom traits for ASNValue value
+    # and call a serializer
     multi method serialize(Int $index, ASNValue $common, TagClass $class) {
         my $value = $common.value;
         # Don't serialize undefined values of type with a default
@@ -81,16 +86,25 @@ class Serializator {
                 self.serialize-choice($index, $value, $common.choice, $class);
     }
 
-    multi method serialize(Int $index, $common, TagClass $class) {
-        die "NYI for: $common";
+    # CHOICE
+    method serialize-choice(Int $index, $common, $choice-of, TagClass $class) {
+        # It is a complex type, so plus 0b10100000
+        my $inner-index = 0x80; # Starting number for inner structures.
+        my $common-key = $common.key;
+        for @$choice-of -> $key {
+            if $key.key eq $common-key {
+                last
+            } else {
+                $inner-index++;
+            }
+        }
+        my $inner = self.serialize($inner-index, $common.value, $class);
+        Buf.new($index +| 0x20, $inner.elems, |$inner);
     }
 
-    multi method serialize(Int $index, Str $str, TagClass $class) {
-        my $delta = do given $class {
-            when Application { 12 }
-            when Context { 0 }
-        }
-        Buf.new($index +| $delta, $str.chars, |$str.encode);
+    # Dying method to detect types not yet implemented
+    multi method serialize(Int $index, $common, TagClass $class) {
+        die "NYI for: $common";
     }
 }
 
@@ -113,5 +127,10 @@ role ASNType {
         }
         my $class = Application;
         Blob.new(Serializator.serialize(0x0, @values, $class));
+    }
+
+    method parse(Blob $input --> ASNType:D) {
+        my $bless = self.bless();
+        $bless;
     }
 }
