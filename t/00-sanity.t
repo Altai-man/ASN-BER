@@ -1,3 +1,4 @@
+use ASN::Types;
 use ASN::BER;
 use Test;
 

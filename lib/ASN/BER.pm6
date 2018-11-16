@@ -1,43 +1,4 @@
-enum TagClass <Universal Application Context Private>;
-
-role Optional {}
-
-role Choice[:$choice-of] {
-    method get-choice() { $choice-of }
-}
-
-role DefaultValue[:$default-value] {
-    method get-default() { $default-value }
-}
-
-role SequenceOf[:$sequence-of] {
-    method get-sequence-type() { $sequence-of }
-}
-
-multi trait_mod:<is>(Attribute $attr, :$optional) is export {
-    $optional does Optional;
-}
-
-multi trait_mod:<is>(Attribute $attr, :$choice-of!) is export {
-    $attr does Choice[:$choice-of];
-}
-
-multi trait_mod:<is>(Attribute $attr, :$default-value) is export {
-    $attr does DefaultValue[:$default-value];
-}
-
-multi trait_mod:<is>(Attribute $attr, :$sequence-of) is export {
-    $attr does SequenceOf[:$sequence-of];
-}
-
-
-class ASNValue {
-    has $.default;
-    has $.choice;
-    has $.optional = False;
-    has $.value;
-    has $.sequence-of;
-}
+use ASN::Types;
 
 class Serializator {
     multi method serialize(Int $index, $common where $common.HOW ~~ Metamodel::EnumHOW, TagClass $class) {
@@ -142,7 +103,7 @@ role ASNType {
             my $attr = self.^attributes.grep(*.name eq $field)[0];
             # Params
             my %params;
-            %params<default> = $attr.get-default if $attr ~~ DefaultValue;
+            %params<default> = $attr.default-value if $attr ~~ DefaultValue;
             %params<choice> = $attr.get-choice if $attr ~~ Choice;
             %params<optional> = True if $attr ~~ Optional;
             $attr.get-sequence-type if $attr ~~ SequenceOf;

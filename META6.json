@@ -2,11 +2,14 @@
     "license": "Artistic-2.0",
     "source-url": "https://github.com/Altai-man/asnber.git",
     "depends": [],
-    "provides": {"ASN::BER": "lib/ASN/BER.pm6"},
+    "provides": {
+        "ASN::Types": "lib/ASN/Types.pm6",
+        "ASN::BER": "lib/ASN/BER.pm6"
+    },
     "name": "ASN::BER",
     "description": "ASN.1 BER encoding and decoding tool",
     "resources": [],
     "perl": "6.c",
     "version": "0.1",
-    "authors": [ "Alexander Kiryuhin <alexander.kiryuhin@gmail.com>" ]
+    "authors": ["Alexander Kiryuhin <alexander.kiryuhin@gmail.com>"]
 }
