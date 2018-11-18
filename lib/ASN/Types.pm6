@@ -1,4 +1,4 @@
-enum TagClass <Universal Application Context Private>;
+enum TagClass is export <Universal Application Context Private>;
 
 # OPTIONAL
 role Optional {}
@@ -23,6 +23,7 @@ role DefaultValue[:$default-value] {
 
 multi trait_mod:<is>(Attribute $attr, :$default-value) is export {
     $attr does DefaultValue[:$default-value];
+    trait_mod:<is>($attr, :default($default-value));
 }
 
 # SEQUENCE OF
@@ -35,6 +36,8 @@ multi trait_mod:<is>(Attribute $attr, :$sequence-of) is export {
 }
 
 class ASNValue {
+    has $.name;
+    has $.type;
     has $.default;
     has $.choice;
     has $.optional = False;

@@ -4,6 +4,8 @@
     "depends": [],
     "provides": {
         "ASN::Types": "lib/ASN/Types.pm6",
+        "ASN::Parser": "lib/ASN/Parser.pm6",
+        "ASN::Serializator": "lib/ASN/Serializator.pm6",
         "ASN::BER": "lib/ASN/BER.pm6"
     },
     "name": "ASN::BER",

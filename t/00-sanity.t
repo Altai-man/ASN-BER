@@ -40,7 +40,7 @@ my $rocket-ber = Blob.new(0x30, 0x1D, 0x80, 0x06, 0x46, 0x61, 0x6C,
 
 my $rocket = Rocket.new(name => 'Falcon', fuel => Solid,
         speed => mph => 18000,
-        payload => <Car GPS>);
+        payload => ["Car", "GPS"]);
 
 is-deeply $rocket.serialize, $rocket-ber, "Correctly serialized a Rocket";
 
