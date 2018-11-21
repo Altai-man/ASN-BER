@@ -26,15 +26,14 @@ role ASNType {
         return @values;
     }
 
-    method serialize(--> Blob) {
+    method serialize(:$debug, :$mode --> Blob) {
         my @values = self!prepare-fields(:!for-parsing);
-        my $class = Application;
-        Blob.new(Serializator.serialize(0x0, @values, $class));
+        Blob.new(Serializator.serialize(@values, :$debug, :$mode));
     }
 
-    method parse(Blob $input --> ASNType:D) {
+    method parse(Blob $input, :$mode, :$debug --> ASNType:D) {
         my ASNValue @values = self!prepare-fields(:for-parsing);
-        my $params = Parser.parse(Buf.new($input), @values);
+        my $params = Parser.parse(Buf.new($input), @values, :$mode, :$debug);
         self.bless(|$params);
     }
 }

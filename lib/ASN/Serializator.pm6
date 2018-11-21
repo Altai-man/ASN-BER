@@ -8,7 +8,7 @@ class Serializator {
     #| ENUMERATED -> enum
 
     # INTEGER
-    multi method serialize(Int $index, Int $int is copy where $int.HOW ~~ Metamodel::ClassHOW, TagClass $class) {
+    multi method serialize(Int $int is copy where $int.HOW ~~ Metamodel::ClassHOW, Int $index = 2, :$debug, :$mode) {
         my $int-encoded = Buf.new;
         my $bit-shift-value = 0;
         my $bit-shift-mask = 0xff;
@@ -23,56 +23,41 @@ class Serializator {
             $bit-shift-value += 8;
             $bit-shift-mask +<= 8;
         }
-        Buf.new($index, $int-encoded.elems, |$int-encoded.reverse);
+
+        say "Encoding Int ($int) with index $index, resulting into $int-encoded.reverse().perl()" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, $int-encoded.elems)), |$int-encoded.reverse);
     }
 
     # ENUMERATED
-    multi method serialize(Int $index, $common where $common.HOW ~~ Metamodel::EnumHOW, TagClass $class) {
-        Buf.new($index, 1, $common.^enum_values.Hash{$common});
+    multi method serialize($enum-value where $enum-value.HOW ~~ Metamodel::EnumHOW, Int $index = 10, :$debug, :$mode) {
+        my $encoded = $enum-value.^enum_values.Hash{$enum-value};
+        say "Encoding Enum ($enum-value) with index $index, resulting into $encoded" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, 1)), $encoded);
     }
 
     # UTF8String
-    multi method serialize(Int $index, Str $str, TagClass $class) {
-        my $delta = do given $class {
-            when Application { 12 }
-            when Context { 0 }
-        }
-        Buf.new($index +| $delta, $str.chars, |$str.encode);
+    multi method serialize(Str $str, Int $index = 12, :$debug) {
+        say "Encoding Str ($str) with index $index, resulting into $str.encode()" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, $str.chars)), |$str.encode);
     }
 
     # SEQUENCE
-    multi method serialize(Int $index, Array $sequence, TagClass $class) {
-        my $delta = do given $class {
-            when Application {
-                16;
-            }
-            when Context {
-                0
-            }
-        }
-
-        my $result = Buf.new($index +| $delta +| 32); # Enable complex type bits (32)
-
+    multi method serialize(Array $sequence, Int $index = 48, :$debug, :$mode) {
         my $temp = Buf.new;
-        my $inner-index = do given $class {
-            when Application { 0x80 }
-            when Context { 0 }
-        }
         for @$sequence -> $attr {
             if $attr ~~ ASNValue && $attr.default {
-                $inner-index++ if $sequence !~~ SequenceOf;
                 next;
             }
-            $temp.append(self.serialize($inner-index, $attr, $sequence ~~ SequenceOf ?? Application !! Context));
-            $inner-index++ if $sequence !~~ SequenceOf;
+            $temp.append(self.serialize($attr, :$debug));
         }
         # Tag + Length + Value
-        Buf.new(|$result, $temp.elems, |$temp);
+        say "Encoding Sequence (@sequence) with index $index into:" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, $temp.elems)), |$temp);
     }
 
     # Common method to enforce custom traits for ASNValue value
     # and call a serializer
-    multi method serialize(Int $index, ASNValue $common, TagClass $class) {
+    multi method serialize(ASNValue $common, :$debug, :$mode) {
         my $value = $common.value;
         # Don't serialize undefined values of type with a default
         return Buf.new if $common.default.defined && !$value.defined;
@@ -86,28 +71,23 @@ class Serializator {
             $value does SequenceOf[sequence-of => $_];
         }
         $common.choice !~~ List ??
-                self.serialize($index, $value, $class) !!
-                self.serialize-choice($index, $value, $common.choice, $class);
+                self.serialize($value, :$debug) !!
+                self.serialize-choice($value, $common.choice, :$debug);
     }
 
     # CHOICE
-    method serialize-choice(Int $index, $common, $choice-of, TagClass $class) {
+    method serialize-choice($common, $choice-of, :$debug, :$mode) {
         # It is a complex type, so plus 0b10100000
-        my $inner-index = 0x80; # Starting number for inner structures.
-        my $common-key = $common.key;
-        for @$choice-of -> $key {
-            if $key.key eq $common-key {
-                last
-            } else {
-                $inner-index++;
-            }
-        }
-        my $inner = self.serialize($inner-index, $common.value, $class);
-        Buf.new($index +| 0x20, $inner.elems, |$inner);
+        my $value = %$choice-of{$common.key};
+        my $index = $value ~~ Pair ?? $value.key !! $value.asn-tag-value;
+        $index +|= 128; # Make index context-specific
+        my $inner = self.serialize($common.value, -1);
+        say "Encoding CHOICE ($common) with index $index into $inner.perl()" if $debug;
+        Buf.new($index, $inner.elems, |$inner);
     }
 
     # Dying method to detect types not yet implemented
-    multi method serialize(Int $index, $common, TagClass $class) {
+    multi method serialize($common, :$debug) {
         die "NYI for: $common";
     }
 }
