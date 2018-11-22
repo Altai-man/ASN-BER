@@ -6,10 +6,10 @@ enum Fuel <Solid Liquid Gas>;
 
 class Rocket does ASNType {
     has ASN::UTF8String $.name;
-    has ASN::UTF8String $.message is default-value("Hello World");
+    has ASN::UTF8String $.message is default-value(ASN::UTF8String.new("Hello World"));
     has Fuel $.fuel;
     has $.speed is choice-of(mph => (1 => Int), kmph => (0 => Int)) is optional;
-    has Str @.payload is sequence-of(Str);
+    has ASN::UTF8String @.payload is sequence-of(ASN::UTF8String);
 
     method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>
@@ -36,9 +36,14 @@ my $rocket-ber = Blob.new(
         0x0C, 0x03, 0x43, 0x61, 0x72,
         0x0C, 0x03, 0x47, 0x50, 0x53);
 
-my $rocket = Rocket.new(name => 'Falcon', fuel => Solid,
+my $rocket = Rocket.new(
+        name => ASN::UTF8String.new('Falcon'),
+        fuel => Solid,
         speed => mph => 18000,
-        payload => ["Car", "GPS"]);
+        payload => [
+            ASN::UTF8String.new("Car"),
+            ASN::UTF8String.new("GPS")
+        ]);
 
 is-deeply $rocket.serialize(:implicit), $rocket-ber, "Correctly serialized a Rocket in implicit mode";
 

@@ -47,6 +47,15 @@ class ASNValue {
 
 # Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
 
-subset ASN::UTF8String of Str is export;
+my class ASN::StringWrapper {
+    has Str $.value;
 
-subset ASN::OctetString of Str is export;
+    # We _want_ it to be inherited, so `method` here,
+    # instead of `submethod`
+    method new(Str $value) { self.bless(:$value) }
+    method BUILD(Str :$!value) {}
+}
+
+class ASN::UTF8String is ASN::StringWrapper {}
+
+class ASN::OctetString is ASN::StringWrapper {}

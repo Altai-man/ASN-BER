@@ -1,7 +1,8 @@
 use ASN::Types;
 
 class Parser {
-    my %types = 0xC => Str;
+    my %types = 0xC => ASN::UTF8String,
+            0x4 => ASN::OctetString;
 
     multi method parse(Buf $input is copy, ASNValue @values, :$debug) {
         my @params;
@@ -61,9 +62,9 @@ class Parser {
         $total;
     }
 
-    multi method parse(Buf $input is rw, Str, :$debug) {
+    multi method parse(Buf $input is rw, ASN::UTF8String, :$debug) {
         say "Parsing `$input.decode()` out of $input.perl()" if $debug;
-        $input.decode;
+        ASN::UTF8String.new($input.decode);
     }
 
     multi method parse(Buf $input is rw, $enum-type where $enum-type.HOW ~~ Metamodel::EnumHOW, :$debug) {

@@ -6,11 +6,11 @@ use Test;
 enum Fuel <Solid Liquid Gas>;
 
 class Rocket does ASNType {
-    has Str $.name;
-    has Str $.message is default-value("Hello World");
+    has ASN::UTF8String $.name;
+    has ASN::UTF8String $.message is default-value(ASN::UTF8String.new("Hello World"));
     has Fuel $.fuel;
     has $.speed is choice-of(mph => (0 => Int), kmph => (1 => Int)) is optional;
-    has Str @.payload is sequence-of(Str);
+    has ASN::UTF8String @.payload is sequence-of(ASN::UTF8String);
 
     method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>
