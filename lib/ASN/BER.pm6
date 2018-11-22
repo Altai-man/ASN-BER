@@ -3,11 +3,11 @@ use ASN::Serializator;
 use ASN::Parser;
 
 role ASNType {
-    method order(--> Array) {...}
+    method ASN-order(--> Array) {...}
 
     method !prepare-fields(:$for-parsing) {
         my @values;
-        for self.order -> $field {
+        for self.ASN-order -> $field {
             my $attr = self.^attributes.grep(*.name eq $field)[0];
             # Params
             my %params;

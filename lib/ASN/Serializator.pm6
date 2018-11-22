@@ -24,21 +24,28 @@ class Serializator {
             $bit-shift-mask +<= 8;
         }
 
-        say "Encoding Int ($int) with index $index, resulting into $int-encoded.reverse().perl()" if $debug;
+        say "Encoding Int ($int) with index $index, resulting in $int-encoded.reverse().perl()" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, $int-encoded.elems)), |$int-encoded.reverse);
     }
 
     # ENUMERATED
     multi method serialize($enum-value where $enum-value.HOW ~~ Metamodel::EnumHOW, Int $index = 10, :$debug, :$mode) {
         my $encoded = $enum-value.^enum_values.Hash{$enum-value};
-        say "Encoding Enum ($enum-value) with index $index, resulting into $encoded" if $debug;
+        say "Encoding Enum ($enum-value) with index $index, resulting in $encoded" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, 1)), $encoded);
     }
 
     # UTF8String
-    multi method serialize(Str $str, Int $index = 12, :$debug) {
-        say "Encoding Str ($str) with index $index, resulting into $str.encode()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, $str.chars)), |$str.encode);
+    multi method serialize(ASN::UTF8String $str, Int $index = 12, :$debug) {
+        my $encoded = $str.encode;
+        say "Encoding UTF8String ($str) with index $index, resulting in $encoded.perl()" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, $str.chars)), |$encoded);
+    }
+
+    multi method serialize(ASN::OctetString $str, Int $index = 4, :$debug) {
+        my $buf =  Buf.new($str.comb(2).map('0x' ~ *).map(*.Int));
+        say "Encoding OctetString ($str) with index $index, resulting in $buf.perl()";
+        Buf.new(|($index == -1 ?? () !! ($index, $buf.elems)), |$buf);
     }
 
     # SEQUENCE
@@ -77,7 +84,6 @@ class Serializator {
 
     # CHOICE
     method serialize-choice($common, $choice-of, :$debug, :$mode) {
-        # It is a complex type, so plus 0b10100000
         my $value = %$choice-of{$common.key};
         my $index = $value ~~ Pair ?? $value.key !! $value.asn-tag-value;
         $index +|= 128; # Make index context-specific
@@ -88,6 +94,10 @@ class Serializator {
 
     # Dying method to detect types not yet implemented
     multi method serialize($common, :$debug) {
+        my $is-asn-type = $common.^roles.map(*.^name).grep(* eq 'ASNType').elems == 1;
+        if $is-asn-type {
+            return $common.serialize(:$debug);
+        }
         die "NYI for: $common";
     }
 }

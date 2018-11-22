@@ -44,3 +44,9 @@ class ASNValue {
     has $.value;
     has $.sequence-of;
 }
+
+# Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
+
+subset ASN::UTF8String of Str is export;
+
+subset ASN::OctetString of Str is export;

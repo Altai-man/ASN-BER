@@ -12,7 +12,7 @@ class Rocket does ASNType {
     has $.speed is choice-of(mph => (0 => Int), kmph => (1 => Int)) is optional;
     has Str @.payload is sequence-of(Str);
 
-    method order() {
+    method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>
     }
 }
