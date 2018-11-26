@@ -204,3 +204,14 @@ class Request does ASNType {
 `ASN::Ber` will call method `ASN-tag-value` method of `RequestBind` instance and will use encode/parse it as APPLICATION-wide tag.
 
 The difference is caused by `Context Specific` and `Application` tags being encoded differently.
+
+
+#### ASN.1 type traits
+
+##### Optional
+
+Apply `is optional` trait to an attribute.
+
+##### Default
+
+Apply `is default-value` trait to an attribute. It additionally sets `is default` trait with the same value.
