@@ -10,7 +10,7 @@ class Rocket does ASNType {
     has ASN::UTF8String $.message is default-value(ASN::UTF8String.new("Hello World"));
     has Fuel $.fuel;
     has $.speed is choice-of(mph => (0 => Int), kmph => (1 => Int)) is optional;
-    has ASN::UTF8String @.payload is sequence-of(ASN::UTF8String);
+    has ASN::UTF8String @.payload;
 
     method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>

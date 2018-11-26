@@ -50,12 +50,14 @@ class Serializator {
     # OctetString
     multi method serialize(ASN::OctetString $str, Int $index = 4, :$debug) {
         my $buf =  Buf.new($str.value.comb(2).map('0x' ~ *).map(*.Int));
-        say "Encoding OctetString ($str.value() with index $index, resulting in $buf.perl()";
+        say "Encoding OctetString ($str.value() with index $index, resulting in $buf.perl()" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, $buf.elems)), |$buf);
     }
 
     # SEQUENCE
-    multi method serialize(Array $sequence, Int $index = 48, :$debug, :$mode) {
+    multi method serialize(Array $sequence, Int $index is copy = 16, :$debug, :$mode) {
+        # COMPLEX element, so add 32
+        $index += 32 if $index != -1;
         my $temp = Buf.new;
         say "Encoding Sequence (@sequence) with index $index into:" if $debug;
         for @$sequence -> $attr {
@@ -70,22 +72,24 @@ class Serializator {
 
     # Common method to enforce custom traits for ASNValue value
     # and call a serializer
-    multi method serialize(ASNValue $common, :$debug, :$mode) {
-        my $value = $common.value;
+    multi method serialize(ASNValue $asn-node, :$debug, :$mode) {
+        my $value = $asn-node.value;
         # Don't serialize undefined values of type with a default
-        return Buf.new if $common.default.defined && !$value.defined;
+        return Buf.new if $asn-node.default.defined && !$value.defined;
 
-        if $common.choice ~~ List {
-            $value does Choice[choice-of => $common.choice];
+        if $asn-node.choice ~~ List {
+            $value does Choice[choice-of => $asn-node.choice];
         }
-        $value does DefaultValue[default-value => $_] with $common.default;
-        $value does Optional if $common.optional;
-        unless $common.sequence-of =:= Any {
-            $value does SequenceOf[sequence-of => $_];
+        $value does DefaultValue[default-value => $_] with $asn-node.default;
+        $value does Optional if $asn-node.optional;
+        my $tag = ();
+        with $asn-node.tag {
+            $value does CustomTagged[tag => $_];
+            $tag = $_ + 128; # Set context-bit
         }
-        $common.choice =:= Any ??
-                self.serialize($value, :$debug) !!
-                self.serialize-choice($value, $common.choice, :$debug);
+        $asn-node.choice =:= Any ??
+                self.serialize($value, |($tag), :$debug) !!
+                self.serialize-choice($value, $asn-node.choice, :$debug);
     }
 
     # CHOICE

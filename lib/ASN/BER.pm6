@@ -15,7 +15,7 @@ role ASNType {
             %params<default> = $attr.default-value if $attr ~~ DefaultValue;
             %params<choice> = $attr.get-choice if $attr ~~ Choice;
             %params<optional> = True if $attr ~~ Optional;
-            %params<sequence-of> = $attr.get-sequence-type if $attr ~~ SequenceOf;
+            %params<tag> = $attr.tag if $attr ~~ CustomTagged;
             if $for-parsing {
                 %params<type> = $attr.type;
             } else {
@@ -26,7 +26,7 @@ role ASNType {
         return @values;
     }
 
-    method serialize(:$debug, :$mode, :$index = 48 --> Blob) {
+    method serialize(:$debug, :$mode, :$index = 16 --> Blob) {
         my @values = self!prepare-fields(:!for-parsing);
         Blob.new(Serializator.serialize(@values, $index, :$debug, :$mode));
     }

@@ -26,23 +26,26 @@ multi trait_mod:<is>(Attribute $attr, :$default-value) is export {
     trait_mod:<is>($attr, :default($default-value));
 }
 
-# SEQUENCE OF
-role SequenceOf[:$sequence-of] {
-    method get-sequence-type() { $sequence-of }
+# [0] like tags
+role CustomTagged[:$tag] {
+    method tag { $tag }
 }
 
-multi trait_mod:<is>(Attribute $attr, :$sequence-of) is export {
-    $attr does SequenceOf[:$sequence-of];
+multi trait_mod:<is>(Attribute $attr, :$tagged) is export {
+    $attr does CustomTagged[tag => $tagged];
 }
 
 class ASNValue {
+    # Common attributes
     has $.name;
     has $.type;
+    has $.tag;
+
+    # Custom ones
     has $.default;
     has $.choice;
     has $.optional = False;
     has $.value;
-    has $.sequence-of;
 }
 
 # Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
