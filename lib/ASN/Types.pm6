@@ -4,7 +4,7 @@ enum TagClass is export <Universal Application Context Private>;
 role Optional {}
 
 multi trait_mod:<is>(Attribute $attr, :$optional) is export {
-    $optional does Optional;
+    $attr does Optional;
 }
 
 # CHOICE
@@ -28,7 +28,7 @@ multi trait_mod:<is>(Attribute $attr, :$default-value) is export {
 
 # [0] like tags
 role CustomTagged[:$tag] {
-    method tag { $tag }
+    method tag(--> Int) { $tag }
 }
 
 multi trait_mod:<is>(Attribute $attr, :$tagged) is export {

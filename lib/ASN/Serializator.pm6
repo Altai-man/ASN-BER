@@ -76,15 +76,16 @@ class Serializator {
         my $value = $asn-node.value;
         # Don't serialize undefined values of type with a default
         return Buf.new if $asn-node.default.defined && !$value.defined;
+        return Buf.new if $asn-node.optional && !$value.defined || $value.elems == 0;
 
         if $asn-node.choice ~~ List {
             $value does Choice[choice-of => $asn-node.choice];
         }
         $value does DefaultValue[default-value => $_] with $asn-node.default;
-        $value does Optional if $asn-node.optional;
+#        $value does Optional if $asn-node.optional;
         my $tag = ();
         with $asn-node.tag {
-            $value does CustomTagged[tag => $_];
+#            $value does CustomTagged[tag => $_];
             $tag = $_ + 128; # Set context-bit
         }
         $asn-node.choice =:= Any ??
