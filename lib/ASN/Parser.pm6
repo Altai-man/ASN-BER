@@ -3,44 +3,89 @@ use ASN::Types;
 class Parser {
     multi method parse(Buf $input is copy, ASNValue @values, :$debug) {
         my @params;
-        my $index = $input[0];
-        my $length = $input[1];
-        $input .= subbuf(2);
-        # As we are parsing a sequence
+
+        # Chop off SEQUENCE tag and length
+        self!get-tag($input);
+        self!get-length($input);
+
         for @values.kv -> Int $i, ASNValue $value {
+            my $tag = self!get-tag($input);
+            my $length = self!get-length($input);
             if $input.elems == 0 {
                 unless @values[$i..*].map(*.optional).all {
-                    die "Too less content";
+                    die "Part of content is missing";
                 }
                 last;
             }
             my $key = self!normalize-name($value.name);
-            say "Parsing $key" if $debug;
+            say "Parsing `$key`" if $debug;
             @params.push: $key;
-            @params.push: self!parse-asn($input, $index, $value, :$debug);
+            @params.push: self!parse-asn($input, $tag, $length, $value, :$debug);
+            say "Parsed `$key`" if $debug;
         }
         @params.Map;
     }
+    method !get-tag(Buf $input is rw --> Int) {
+        my $tag = $input[0];
+        $input .= subbuf(1);
+        $tag;
+    }
 
-    method !parse-asn(Buf $input is rw, Int $index is copy, ASNValue $value, :$debug) {
-        my $read-index = $input[0];
-        say "Index parsed is $read-index" if $debug;
-
-        # Return default value right now
-        if $index != $read-index && $value.default.defined {
-            say "Returned default value $value.default()" if $debug;
-            return $value.default;
+    method !get-length(Buf $input is rw --> Int) {
+        my $length = $input[0];
+        if $length <= 127 {
+            $input .= subbuf(1);
+            return $length;
+        } else {
+            my $octets = $input.subbuf(1, $length - 128);
+            $input .= subbuf($length - 127);
+            return self.parse($octets, Int);
         }
+    }
 
-        my $length = $input[1];
-        my $read-value = $input.subbuf(2, $length);
-        $input .= subbuf($length + 2);
-
+    method !parse-asn(Buf $input is rw, Int $tag, Int $length, ASNValue $value, :$debug) {
+        say "Index parsed is $tag" if $debug;
         say "Length of value is $length" if $debug;
 
+        my $tag-to-be = self!calculate-tag($value);
+        # Return default value right now
+        if $tag-to-be !~~ $tag {
+            with $value.default {
+                say "Returned default value $_.perl()" if $debug;
+                $input.prepend($tag, $length);
+                return $_;
+            }
+            die "Incorrect tag!";
+        }
+
+        my $read-value = $input.subbuf(0, $length);
+        $input .= subbuf($length);
+
         $value.choice.defined ??
-                self!parse-choice($read-index, $read-value, $value, :$debug) !!
+                self!parse-choice($tag, $read-value, $value, :$debug) !!
                 self.parse($read-value, $value.type, :$debug);
+    }
+    method !calculate-tag(ASNValue $value) {
+        my $tag = 0;
+        $tag += do given $value.type {
+            when ASN::UTF8String {
+                12
+            }
+            when ASN::OctetString {
+                4
+            }
+            when Enumeration {
+                10
+            }
+            when Positional {
+                48
+            }
+        }
+        with $value.choice {
+            my %opts = $_;
+            return %opts.map({ $_ ~~ Pair ?? $_.key.Int + 128 !! $_.value.ASN-tag-value + 64 given $_.value }).any;
+        }
+        $tag;
     }
 
     method !parse-choice(Int $index, Buf $input is rw, ASNValue $value, :$debug) {
@@ -72,7 +117,7 @@ class Parser {
         ~("$name" ~~ / \w .+ /)
     }
 
-    multi method parse(Buf $input is rw, $type where $type ~~ Int && $type.HOW ~~ Metamodel::ClassHOW, :$debug) {
+    multi method parse(Buf $input is rw, Int $type where $type.HOW ~~ Metamodel::ClassHOW, :$debug) {
         my $total = 0;
         for (0, 8 ... *) Z @$input.reverse -> ($shift, $byte) {
             $total +|= $byte +< $shift;
@@ -81,13 +126,13 @@ class Parser {
         $total;
     }
 
-    multi method parse(Buf $input is rw, $str where $str ~~ ASN::UTF8String, :$debug) {
+    multi method parse(Buf $input is rw, ASN::UTF8String $str, :$debug) {
         my $decoded = $input.decode();
         say "Parsing `$decoded.perl()` out of $input.perl()" if $debug;
         $str.new($decoded);
     }
 
-    multi method parse(Buf $input is rw, $str where $str ~~ ASN::OctetString, :$debug) {
+    multi method parse(Buf $input is rw, ASN::OctetString $str, :$debug) {
         my $decoded = $input.map({ .base(16) }).join;
         say "Parsing `$decoded.perl()` out of $input.perl()" if $debug;
         $str.new($decoded);
@@ -98,7 +143,7 @@ class Parser {
         $enum-type($input[0]);
     }
 
-    multi method parse(Buf $input is rw, $a where $a ~~ Positional, :$debug --> Array) {
+    multi method parse(Buf $input is rw, Positional $a, :$debug --> Array) {
         say "Parsing SEQUENCE out of $input.perl()" if $debug;
         my @a;
         loop {

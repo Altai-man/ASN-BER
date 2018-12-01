@@ -57,9 +57,7 @@ class LongSequence does ASNType {
 
 my $sequence = LongSequence.new(long-value => ASN::UTF8String.new("Falcon" x 101));
 
-my $long-value-ber = Blob.new(0x30, 0x82, 0x02, 0x62, 0x0C, 0x82, 0x02, 0x5E, |("Falcon" x 100).encode);
-
-use ASN::Serializator;
+my $long-value-ber = Blob.new(0x30, 0x82, 0x02, 0x62, 0x0C, 0x82, 0x02, 0x5E, |("Falcon" x 101).encode);
 
 is-deeply $sequence.serialize[0..30], $long-value-ber[0..30], "Correctly encode long defined length";
 
