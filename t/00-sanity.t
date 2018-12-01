@@ -49,4 +49,20 @@ is-deeply $rocket.serialize(:implicit), $rocket-ber, "Correctly serialized a Roc
 
 is-deeply Rocket.parse($rocket-ber, :implicit), $rocket, "Correctly parsed a Rocket in implicit mode";
 
+class LongSequence does ASNType {
+    has ASN::UTF8String $.long-value;
+
+    method ASN-order { <$!long-value> }
+}
+
+my $sequence = LongSequence.new(long-value => ASN::UTF8String.new("Falcon" x 101));
+
+my $long-value-ber = Blob.new(0x30, 0x82, 0x02, 0x62, 0x0C, 0x82, 0x02, 0x5E, |("Falcon" x 100).encode);
+
+use ASN::Serializator;
+
+is-deeply $sequence.serialize[0..30], $long-value-ber[0..30], "Correctly encode long defined length";
+
+is-deeply LongSequence.parse($long-value-ber), $sequence, "Correctly decode long defined length";
+
 done-testing;

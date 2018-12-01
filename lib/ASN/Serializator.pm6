@@ -12,6 +12,20 @@ class Serializator {
     #| SEQUENCE -> Array
     #| ENUMERATED -> enum
 
+    method !calculate-len(Buf $value, :$infinite) {
+        with $infinite {
+            return Buf.new(128);
+        }
+        if $value.elems <= 127 {
+            return Buf.new($value.elems);
+        }
+        my $long = self.serialize($value.elems, -1);
+        if $long.elems > 126 {
+            die "The value is too long, please use streaming";
+        }
+        return Buf.new($long.elems + 128, |$long);
+    }
+
     # INTEGER
     multi method serialize(Int $int is copy where $int.HOW ~~ Metamodel::ClassHOW, Int $index = 2, :$debug, :$mode) {
         my $int-encoded = Buf.new;
@@ -30,7 +44,7 @@ class Serializator {
         }
 
         say "Encoding Int ($int) with index $index, resulting in $int-encoded.reverse().perl()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, $int-encoded.elems)), |$int-encoded.reverse);
+        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($int-encoded))), |$int-encoded.reverse);
     }
 
     # ENUMERATED
@@ -42,16 +56,16 @@ class Serializator {
 
     # UTF8String
     multi method serialize(ASN::UTF8String $str, Int $index = 12, :$debug) {
-        my $encoded = $str.value.encode;
+        my $encoded = Buf.new($str.value.encode);
         say "Encoding UTF8String ($str.value() with index $index, resulting in $encoded.perl()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, $str.value.chars)), |$encoded);
+        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($encoded))), |$encoded);
     }
 
     # OctetString
     multi method serialize(ASN::OctetString $str, Int $index = 4, :$debug) {
         my $buf =  Buf.new($str.value.comb(2).map('0x' ~ *).map(*.Int));
         say "Encoding OctetString ($str.value() with index $index, resulting in $buf.perl()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, $buf.elems)), |$buf);
+        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($buf))), |$buf);
     }
 
     # SEQUENCE
@@ -67,7 +81,7 @@ class Serializator {
             $temp.append(self.serialize($attr, :$debug));
         }
         # Tag + Length + Value
-        Buf.new(|($index == -1 ?? () !! ($index, $temp.elems)), |$temp);
+        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($temp))), |$temp);
     }
 
     # Common method to enforce custom traits for ASNValue value
@@ -82,10 +96,8 @@ class Serializator {
             $value does Choice[choice-of => $asn-node.choice];
         }
         $value does DefaultValue[default-value => $_] with $asn-node.default;
-#        $value does Optional if $asn-node.optional;
         my $tag = ();
         with $asn-node.tag {
-#            $value does CustomTagged[tag => $_];
             $tag = $_ + 128; # Set context-bit
         }
         $asn-node.choice =:= Any ??
@@ -110,7 +122,7 @@ class Serializator {
         #$index +|= 128; # Make index context-specific
         say "Encoding CHOICE ($value) with index $index" if $debug;
         my $inner = $is-simple-implicit ?? self.serialize($value.value, -1) !! $value.value.serialize(:$debug, :index(-1));
-        Buf.new($index, $inner.elems, |$inner);
+        Buf.new($index, |self!calculate-len($inner), |$inner);
     }
 
     # Dying method to detect types not yet implemented
