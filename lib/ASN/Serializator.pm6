@@ -1,6 +1,6 @@
 use ASN::Types;
 
-class Serializator {
+class Serializer {
     my $primitive-type =
             Int | Str |
             ASN::UTF8String | ASN::OctetString;

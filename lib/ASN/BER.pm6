@@ -28,7 +28,7 @@ role ASNType {
 
     method serialize(:$debug, :$mode, :$index = 16 --> Blob) {
         my @values = self!prepare-fields(:!for-parsing);
-        Blob.new(Serializator.serialize(@values, $index, :$debug, :$mode));
+        Blob.new(Serializer.serialize(@values, $index, :$debug, :$mode));
     }
 
     method parse(Blob $input, :$mode, :$debug --> ASNType:D) {
