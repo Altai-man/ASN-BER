@@ -104,6 +104,9 @@ class Serializer {
     # CHOICE
     method serialize-choice($value, $choice-of, :$debug, :$mode) {
         my $description = %$choice-of{$value.key};
+        if Any ~~ $description {
+            die "Enumeration $choice-of.perl() does not know about $value.key().perl()";
+        }
         my $is-simple-implicit = $description ~~ Pair;
         my $index = $is-simple-implicit ?? $description.key !! $description.ASN-tag-value;
         # Set complex type bit
