@@ -96,8 +96,9 @@ class Parser {
                 if $option.value ~~ Pair {
                     take $option.value.key.Int + 128;
                 } else {
-                    # Complex, application-wide type, 32 + 64
-                    take $option.value.ASN-tag-value + 32 + 64;
+                    my $tag = $option.value.ASN-tag-value + 64;
+                    $tag += 32 if $option.value !~~ $primitive-type;
+                    take $tag;
                 }
             }
         }
@@ -157,6 +158,11 @@ class Parser {
     multi method parse(Buf $input is rw, $enum-type where $enum-type.HOW ~~ Metamodel::EnumHOW, :$debug) {
         say "Parsing `$input[0]` out of $input.perl()" if $debug;
         $enum-type($input[0]);
+    }
+
+    multi method parse(Buf $input, ASN-Null $type, :$debug) {
+        say "Parsing NULL out of $input.perl()" if $debug;
+        $type.new;
     }
 
     multi method parse(Buf $input is rw, Positional $a, :$debug --> Array) {

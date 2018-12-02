@@ -50,6 +50,10 @@ class ASNValue {
 
 # Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
 
+class ASN-Null {
+    method serialize { Buf.new(0) }
+}
+
 my class ASN::StringWrapper {
     has Str $.value;
 
@@ -64,5 +68,5 @@ class ASN::UTF8String is ASN::StringWrapper {}
 class ASN::OctetString is ASN::StringWrapper {}
 
 our $primitive-type is export =
-        Int | Str |
+        Int | Str | ASN-Null |
         ASN::UTF8String | ASN::OctetString;

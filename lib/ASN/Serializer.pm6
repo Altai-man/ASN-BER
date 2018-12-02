@@ -121,11 +121,14 @@ class Serializer {
         #$index +|= 128; # Make index context-specific
         say "Encoding CHOICE ($value) with index $index" if $debug;
         my $inner = $is-simple-implicit ?? self.serialize($value.value, -1) !! $value.value.serialize(:$debug, :index(-1));
-        Buf.new($index, |self!calculate-len($inner), |$inner);
+        if $inner eqv Buf.new(0) {
+            return Buf.new($index, |$inner);
+        }
+        Buf.new((($index, |self!calculate-len($inner))), |$inner);
     }
 
     # Dying method to detect types not yet implemented
     multi method serialize($common, :$debug) {
-        die "NYI for: $common";
+        die "NYI for: $common.perl()";
     }
 }
