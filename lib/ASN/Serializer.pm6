@@ -1,10 +1,6 @@
 use ASN::Types;
 
 class Serializer {
-    my $primitive-type =
-            Int | Str |
-            ASN::UTF8String | ASN::OctetString;
-
     #| Types map:
     #| INTEGER -> Int
     #| UTF8String -> ASN::UTF8String
@@ -12,7 +8,7 @@ class Serializer {
     #| SEQUENCE -> Array
     #| ENUMERATED -> enum
 
-    method !calculate-len(Buf $value, :$infinite) {
+    method !calculate-len(Blob $value, :$infinite) {
         with $infinite {
             return Buf.new(128);
         }

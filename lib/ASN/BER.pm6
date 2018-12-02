@@ -1,5 +1,5 @@
 use ASN::Types;
-use ASN::Serializator;
+use ASN::Serializer;
 use ASN::Parser;
 
 role ASNType {

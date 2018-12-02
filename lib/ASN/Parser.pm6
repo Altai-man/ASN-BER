@@ -9,14 +9,14 @@ class Parser {
         self!get-length($input);
 
         for @values.kv -> Int $i, ASNValue $value {
-            my $tag = self!get-tag($input);
-            my $length = self!get-length($input);
             if $input.elems == 0 {
                 unless @values[$i..*].map(*.optional).all {
                     die "Part of content is missing";
                 }
                 last;
             }
+            my $tag = self!get-tag($input);
+            my $length = self!get-length($input);
             my $key = self!normalize-name($value.name);
             say "Parsing `$key`" if $debug;
             @params.push: $key;
@@ -55,7 +55,7 @@ class Parser {
                 $input.prepend($tag, $length);
                 return $_;
             }
-            die "Incorrect tag!";
+            die "Incorrect tag, expected $tag-to-be.perl(), got $tag";
         }
 
         my $read-value = $input.subbuf(0, $length);
@@ -71,10 +71,13 @@ class Parser {
             when ASN::UTF8String {
                 12
             }
+            when $_ ~~ Int && $_.HOW ~~ Metamodel::ClassHOW {
+                2
+            }
             when ASN::OctetString {
                 4
             }
-            when Enumeration {
+            when $_ ~~ Enumeration && $_.HOW ~~ Metamodel::EnumHOW {
                 10
             }
             when Positional {
@@ -82,10 +85,23 @@ class Parser {
             }
         }
         with $value.choice {
-            my %opts = $_;
-            return %opts.map({ $_ ~~ Pair ?? $_.key.Int + 128 !! $_.value.ASN-tag-value + 64 given $_.value }).any;
+            return self!convert-choice-to-tags($_);
         }
         $tag;
+    }
+
+    method !convert-choice-to-tags($choice) {
+        my @opts = gather {
+            for @$choice -> $option {
+                if $option.value ~~ Pair {
+                    take $option.value.key.Int + 128;
+                } else {
+                    # Complex, application-wide type, 32 + 64
+                    take $option.value.ASN-tag-value + 32 + 64;
+                }
+            }
+        }
+        @opts.any;
     }
 
     method !parse-choice(Int $index, Buf $input is rw, ASNValue $value, :$debug) {

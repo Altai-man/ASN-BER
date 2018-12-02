@@ -62,3 +62,7 @@ my class ASN::StringWrapper {
 class ASN::UTF8String is ASN::StringWrapper {}
 
 class ASN::OctetString is ASN::StringWrapper {}
+
+our $primitive-type is export =
+        Int | Str |
+        ASN::UTF8String | ASN::OctetString;
