@@ -26,6 +26,8 @@ role ASNChoice {
     method new($choice-value) { $?CLASS.bless(:$choice-value) }
 }
 
+class ASN-Null {}
+
 # String traits
 role ASN::StringWrapper {
     has Str $.value;
@@ -87,27 +89,5 @@ class ASNValue {
     has $.value;
     has $.is-pos = False;
 }
-#
-## Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
-#
-#role ASNChoice {
-#    has $.asn-choice-value;
-#    has $.asn-choice-description;
-#}
-#
-class ASN-Null {}
 
-#my class ASN::StringWrapper {
-#    has Str $.value;
-#
-#    # We _want_ it to be inherited, so `method` here,
-#    # instead of `submethod`
-#    method new(Str $value) { self.bless(:$value) }
-#    method BUILD(Str :$!value) {}
-#}
-#
-#class ASN::UTF8String is ASN::StringWrapper {}
-#
-#class ASN::OctetString is ASN::StringWrapper {}
-#
 our $primitive-type is export = Int | Str | ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null;
