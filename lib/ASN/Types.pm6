@@ -1,19 +1,54 @@
+enum TagModes is export <Implicit Explicit Automatic>;
+
 enum TagClass is export <Universal Application Context Private>;
+
+role ASNSequence {
+    method ASN-order {...}
+}
+
+role ASNSequenceOf[$type] {
+    method type { $type }
+}
+
+role ASNSet {
+}
+
+role ASNSetOf[$type] {
+    method type { $type }
+}
+
+role ASNChoice {
+    method ASN-choice() {...}
+    method ASN-value() {...}
+}
+
+# String traits
+role ASN::StringWrapper {
+    has Str $.value;
+
+    # We _want_ it to be inherited, so `method` here,
+    # instead of `submethod`
+    method new(Str $value) { self.bless(:$value) }
+    method BUILD(Str :$!value) {}
+}
+
+role ASN::Types::UTF8String does ASN::StringWrapper {}
+
+multi trait_mod:<is>(Attribute $attr, :$UTF8String) is export {
+    $attr does ASN::Types::UTF8String;
+}
+
+role ASN::Types::OctetString does ASN::StringWrapper {}
+
+multi trait_mod:<is>(Attribute $attr, :$OctetString) is export {
+    $attr does ASN::Types::OctetString;
+}
 
 # OPTIONAL
 role Optional {}
 
 multi trait_mod:<is>(Attribute $attr, :$optional) is export {
     $attr does Optional;
-}
-
-# CHOICE
-role Choice[:$choice-of] {
-    method get-choice() { $choice-of }
-}
-
-multi trait_mod:<is>(Attribute $attr, :$choice-of!) is export {
-    $attr does Choice[:$choice-of];
 }
 
 # DEFAULT
@@ -39,34 +74,36 @@ class ASNValue {
     # Common attributes
     has $.name;
     has $.type;
-    has $.tag;
+    has $.tag is rw;
 
     # Custom ones
     has $.default;
     has $.choice;
     has $.optional = False;
     has $.value;
+    has $.is-pos = False;
 }
+#
+## Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
+#
+#role ASNChoice {
+#    has $.asn-choice-value;
+#    has $.asn-choice-description;
+#}
+#
+class ASN-Null {}
 
-# Number of types that can be used where mapping from Perl 6 native types into ASN.1 ones is LTA.
-
-class ASN-Null {
-    method serialize { Buf.new(0) }
-}
-
-my class ASN::StringWrapper {
-    has Str $.value;
-
-    # We _want_ it to be inherited, so `method` here,
-    # instead of `submethod`
-    method new(Str $value) { self.bless(:$value) }
-    method BUILD(Str :$!value) {}
-}
-
-class ASN::UTF8String is ASN::StringWrapper {}
-
-class ASN::OctetString is ASN::StringWrapper {}
-
-our $primitive-type is export =
-        Int | Str | ASN-Null |
-        ASN::UTF8String | ASN::OctetString;
+#my class ASN::StringWrapper {
+#    has Str $.value;
+#
+#    # We _want_ it to be inherited, so `method` here,
+#    # instead of `submethod`
+#    method new(Str $value) { self.bless(:$value) }
+#    method BUILD(Str :$!value) {}
+#}
+#
+#class ASN::UTF8String is ASN::StringWrapper {}
+#
+#class ASN::OctetString is ASN::StringWrapper {}
+#
+our $primitive-type is export = Int | Str | ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null;

@@ -7,7 +7,6 @@
         "ASN::Parser": "lib/ASN/Parser.pm6",
         "ASN::Serializer::Async": "lib/ASN/Serializer/Async.pm6",
         "ASN::Serializer": "lib/ASN/Serializer.pm6",
-        "ASN::BER": "lib/ASN/BER.pm6",
         "ASN::Parser::Async": "lib/ASN/Parser/Async.pm6"
     },
     "name": "ASN::BER",

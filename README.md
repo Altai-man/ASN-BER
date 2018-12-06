@@ -181,7 +181,7 @@ BindRequest ::= [APPLICATION 0] SEQUENCE {
 }
 ```
 
-it might be expressed with `ASN::BER` like that:
+might be expressed like that:
 
 ```
 class BindRequest does ASNType {

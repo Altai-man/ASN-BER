@@ -1,16 +1,29 @@
 use ASN::Types;
-use ASN::BER;
 use ASN::Parser::Async;
 use Test;
 
 enum Fuel <Solid Liquid Gas>;
 
-class Rocket does ASNType {
-    has ASN::UTF8String $.name;
-    has ASN::UTF8String $.message is default-value(ASN::UTF8String.new("Hello World"));
+class SpeedChoice does ASNChoice {
+    has $.value;
+
+    method new($value) { self.bless(:$value) }
+
+    method ASN-choice() {
+        { mph => (1 => Int), kmph => (0 => Int) }
+    }
+
+    method ASN-value() {
+        $!value;
+    }
+}
+
+class Rocket does ASNSequence {
+    has Str $.name is UTF8String;
+    has Str $.message is UTF8String is default-value("Hello World") is optional;
     has Fuel $.fuel;
-    has $.speed is choice-of(mph => (0 => Int), kmph => (1 => Int)) is optional;
-    has ASN::UTF8String @.payload;
+    has SpeedChoice $.speed is optional;
+    has Str @.payload is UTF8String;
 
     method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>

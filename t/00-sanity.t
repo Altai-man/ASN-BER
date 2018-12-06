@@ -1,15 +1,30 @@
 use ASN::Types;
-use ASN::BER;
+use ASN::Serializer;
+use ASN::Parser;
 use Test;
 
 enum Fuel <Solid Liquid Gas>;
 
-class Rocket does ASNType {
-    has ASN::UTF8String $.name;
-    has ASN::UTF8String $.message is default-value(ASN::UTF8String.new("Hello World"));
+class SpeedChoice does ASNChoice {
+    has $.value;
+
+    method new($value) { self.bless(:$value) }
+
+    method ASN-choice() {
+        { mph => (1 => Int), kmph => (0 => Int) }
+    }
+
+    method ASN-value() {
+        $!value;
+    }
+}
+
+class Rocket does ASNSequence {
+    has Str $.name is UTF8String;
+    has Str $.message is UTF8String is default-value("Hello World") is optional;
     has Fuel $.fuel;
-    has $.speed is choice-of(mph => (1 => Int), kmph => (0 => Int)) is optional;
-    has ASN::UTF8String @.payload;
+    has SpeedChoice $.speed is optional;
+    has Str @.payload is UTF8String;
 
     method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>
@@ -37,30 +52,34 @@ my $rocket-ber = Blob.new(
         0x0C, 0x03, 0x47, 0x50, 0x53);
 
 my $rocket = Rocket.new(
-        name => ASN::UTF8String.new('Falcon'),
+        name => 'Falcon',
         fuel => Solid,
-        speed => mph => 18000,
+        speed => SpeedChoice.new(Pair.new('mph', 18000)),
         payload => [
-            ASN::UTF8String.new("Car"),
-            ASN::UTF8String.new("GPS")
+            "Car", "GPS"
         ]);
 
-is-deeply $rocket.serialize(:implicit), $rocket-ber, "Correctly serialized a Rocket in implicit mode";
+is-deeply ASN::Serializer.serialize($rocket, :mode(Implicit)), $rocket-ber, "Correctly serialized a Rocket in implicit mode";
 
-is-deeply Rocket.parse($rocket-ber, :implicit), $rocket, "Correctly parsed a Rocket in implicit mode";
+is-deeply ASN::Parser
+        .new(type => Rocket)
+        .parse($rocket-ber, :mode(Implicit)),
+        $rocket, "Correctly parsed a Rocket in implicit mode";
 
-class LongSequence does ASNType {
-    has ASN::UTF8String $.long-value;
+class LongSequence does ASNSequence {
+    has Str $.long-value is UTF8String;
 
     method ASN-order { <$!long-value> }
 }
 
-my $sequence = LongSequence.new(long-value => ASN::UTF8String.new("Falcon" x 101));
+my $sequence = LongSequence.new(long-value => "Falcon" x 101);
 
 my $long-value-ber = Blob.new(0x30, 0x82, 0x02, 0x62, 0x0C, 0x82, 0x02, 0x5E, |("Falcon" x 101).encode);
 
-is-deeply $sequence.serialize[0..30], $long-value-ber[0..30], "Correctly encode long defined length";
+is-deeply ASN::Serializer.serialize($sequence, :mode(Implicit))[0..30], $long-value-ber[0..30], "Correctly encode long defined length";
 
-is-deeply LongSequence.parse($long-value-ber), $sequence, "Correctly decode long defined length";
+is-deeply ASN::Parser
+        .new(type => LongSequence)
+        .parse($long-value-ber), $sequence, "Correctly decode long defined length";
 
 done-testing;

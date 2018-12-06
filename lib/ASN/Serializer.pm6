@@ -1,12 +1,32 @@
 use ASN::Types;
 
-class Serializer {
-    #| Types map:
-    #| INTEGER -> Int
-    #| UTF8String -> ASN::UTF8String
-    #| OctetString -> ASN::OctetString
-    #| SEQUENCE -> Array
-    #| ENUMERATED -> enum
+class ASN::Serializer {
+    my %string-types = 'ASN::Types::UTF8String' => ASN::Types::UTF8String;
+
+    multi method serialize(ASNSequence $sequence, Int $index = 48, :$debug, :$mode = Implicit) {
+        my Blob $res = Buf.new;
+        say "Encoding ASNSequence in $sequence.ASN-order().perl()" if $debug;
+        for $sequence.ASN-order -> $field {
+            my $attr = $sequence.^attributes.grep(*.name eq $field)[0];
+            # Params
+            my %params;
+            %params<name> = $field;
+            %params<default> = $attr.default-value if $attr ~~ DefaultValue;
+            %params<tag> = $attr.tag if $attr ~~ CustomTagged;
+            my $value = $attr.get_value($sequence);
+
+            next if $attr ~~ Optional && (!$value.defined || $value ~~ Positional && $value.elems == 0);
+
+            %params<value> = $value;
+            if $attr ~~ ASN::Types::UTF8String {
+                %params<type> = ASN::Types::UTF8String;
+            } elsif $attr ~~ ASN::Types::OctetString {
+                %params<type> = ASN::Types::OctetString;
+            }
+            $res.push(self.serialize(ASNValue.new(|%params), :$debug, :$mode));
+        }
+        Blob.new(|($index == -1 ?? () !! ($index, |self!calculate-len($res))), |$res);
+    }
 
     method !calculate-len(Blob $value, :$infinite) {
         with $infinite {
@@ -43,6 +63,17 @@ class Serializer {
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($int-encoded))), |$int-encoded.reverse);
     }
 
+    # NULL
+    multi method serialize(ASN-Null, Int $index = 5, :$debug, :$mode) {
+        Buf.new(|($index == -1 ?? () !! ($index, 0)));
+    }
+
+    # BOOLEAN
+    multi method serialize(Bool $bool, Int $index = 1, :$debug, :$mode) {
+        say "Encoding Bool ($bool with index $index" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, 1)), $bool ?? 255 !! 0);
+    }
+
     # ENUMERATED
     multi method serialize($enum-value where $enum-value.HOW ~~ Metamodel::EnumHOW, Int $index = 10, :$debug, :$mode) {
         my $encoded = $enum-value.^enum_values.Hash{$enum-value};
@@ -51,30 +82,27 @@ class Serializer {
     }
 
     # UTF8String
-    multi method serialize(ASN::UTF8String $str, Int $index = 12, :$debug) {
+    multi method serialize(ASN::Types::UTF8String $str, Int $index = 12, :$debug) {
         my $encoded = Buf.new($str.value.encode);
         say "Encoding UTF8String ($str.value() with index $index, resulting in $encoded.perl()" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($encoded))), |$encoded);
     }
 
     # OctetString
-    multi method serialize(ASN::OctetString $str, Int $index = 4, :$debug) {
+    multi method serialize(ASN::Types::OctetString $str, Int $index = 4, :$debug) {
         my $buf =  Buf.new($str.value.comb(2).map('0x' ~ *).map(*.Int));
         say "Encoding OctetString ($str.value() with index $index, resulting in $buf.perl()" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($buf))), |$buf);
     }
 
     # SEQUENCE
-    multi method serialize(Array $sequence, Int $index is copy = 16, :$debug, :$mode) {
+    multi method serialize(Positional $sequence, Int $index is copy = 16, :$debug, :$mode) {
         # COMPLEX element, so add 32
         $index += 32 if $index != -1;
         my $temp = Buf.new;
-        say "Encoding Sequence (@sequence) with index $index into:" if $debug;
+        say "Encoding Sequence ($sequence.perl()) with index $index into:" if $debug;
         for @$sequence -> $attr {
-            if $attr ~~ ASNValue && $attr.default {
-                next;
-            }
-            $temp.append(self.serialize($attr, :$debug));
+            $temp.append(self.serialize($attr, :$debug, :$mode));
         }
         # Tag + Length + Value
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($temp))), |$temp);
@@ -84,47 +112,48 @@ class Serializer {
     # and call a serializer
     multi method serialize(ASNValue $asn-node, :$debug, :$mode) {
         my $value = $asn-node.value;
-        # Don't serialize undefined values of type with a default
-        return Buf.new if $asn-node.default.defined && !$value.defined;
-        return Buf.new if $asn-node.optional && !$value.defined || $value.elems == 0;
 
-        if $asn-node.choice ~~ List {
-            $value does Choice[choice-of => $asn-node.choice];
+        # Don't serialize undefined values of type with a default
+        return Buf.new if $asn-node.default eqv $value;
+        return self.serialize($asn-node.type.new($value), :$debug, :$mode) if $value ~~ Str;
+
+        if $value ~~ Positional {
+            $value = $value.map({
+                if $asn-node.type ~~ ASN::Types::UTF8String {
+                    ASN::Types::UTF8String.new($_);
+                } elsif $asn-node.type ~~ ASN::Types::OctetString {
+                    ASN::Types::OctetString.new($_);
+                } else {
+                    $_;
+                }
+            });
         }
-        $value does DefaultValue[default-value => $_] with $asn-node.default;
-        my $tag = ();
-        with $asn-node.tag {
-            $tag = $_ + 128; # Set context-bit
-        }
-        $asn-node.choice =:= Any ??
-                self.serialize($value, |($tag), :$debug) !!
-                self.serialize-choice($value, $asn-node.choice, :$debug);
+        self.serialize($value, |( $_ + 128 with $asn-node.tag), :$debug, :$mode);
     }
 
     # CHOICE
-    method serialize-choice($value, $choice-of, :$debug, :$mode) {
-        my $description = %$choice-of{$value.key};
-        if Any ~~ $description {
-            die "Enumeration $choice-of.perl() does not know about $value.key().perl()";
+    multi method serialize(ASNChoice $choice, :$debug, :$mode) {
+        my $description = $choice.ASN-choice;
+        my $choice-item = $description{$choice.ASN-value.key};
+        unless $description{$choice.ASN-value.key}:exists {
+            die "Could not find value by $choice.ASN-value().key() out of $description.perl()";
         }
-        my $is-simple-implicit = $description ~~ Pair;
-        my $index = $is-simple-implicit ?? $description.key !! $description.ASN-tag-value;
-        # Set complex type bit
-        $index += 32 unless $value.value ~~ $primitive-type;
-        # Set APPLICATION content type if we are in APPLICATION mode
+        my $value = $choice.ASN-value.value;
 
-        if $is-simple-implicit {
-            $index += 128;
-        } else {
-            $index += 64;
+        my $index = do given $mode {
+            when Implicit {
+                if $choice-item ~~ Pair {
+                    $choice-item.key + 128;
+                } else {
+                    $choice-item.ASN-tag-value + 64;
+                }
+            }
         }
-        #$index +|= 128; # Make index context-specific
-        say "Encoding CHOICE ($value) with index $index" if $debug;
-        my $inner = $is-simple-implicit ?? self.serialize($value.value, -1) !! $value.value.serialize(:$debug, :index(-1));
-        if $inner eqv Buf.new(0) {
-            return Buf.new($index, |$inner);
-        }
-        Buf.new((($index, |self!calculate-len($inner))), |$inner);
+        $index += 32 unless $value ~~ $primitive-type;
+
+        my $inner = self.serialize($value, -1, :$debug, :$mode);
+        say "Encoding ASNChoice by $description.perl() with value: $value.perl()" if $debug;
+        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($inner))), |$inner);
     }
 
     # Dying method to detect types not yet implemented

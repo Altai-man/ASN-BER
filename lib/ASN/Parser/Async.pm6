@@ -1,10 +1,11 @@
-use ASN::BER;
+use ASN::Parser;
 
 class ASN::Parser::Async {
     has Supplier::Preserving $!out = Supplier::Preserving.new;
     has Supply $!values = $!out.Supply;
     has Buf $!buffer = Buf.new;
-    has ASNType $.type;
+    has ASN::Parser $!parser = ASN::Parser.new(type => $!type);
+    has $.type;
 
     method values(--> Supply) {
         $!values;
@@ -17,7 +18,7 @@ class ASN::Parser::Async {
             my $length = $!buffer[1];
             last if $!buffer.elems < $length + 2;
             my $item-octets = $!buffer.subbuf(0, $length + 2);
-            $!out.emit: $!type.parse($item-octets);
+            $!out.emit: $!parser.parse($item-octets);
             $!buffer .= subbuf($length + 2);
         }
     }

@@ -1,30 +1,114 @@
 use ASN::Types;
 
-class Parser {
-    multi method parse(Buf $input is copy, ASNValue @values, :$debug) {
-        my @params;
+class ASN::Parser {
+    has $.type;
 
-        # Chop off SEQUENCE tag and length
-        self!get-tag($input);
-        self!get-length($input);
-
-        for @values.kv -> Int $i, ASNValue $value {
-            if $input.elems == 0 {
-                unless @values[$i..*].map(*.optional).all {
-                    die "Part of content is missing";
-                }
-                last;
-            }
-            my $tag = self!get-tag($input);
-            my $length = self!get-length($input);
-            my $key = self!normalize-name($value.name);
-            say "Parsing `$key`" if $debug;
-            @params.push: $key;
-            @params.push: self!parse-asn($input, $tag, $length, $value, :$debug);
-            say "Parsed `$key`" if $debug;
-        }
-        @params.Map;
+    multi method parse(Blob $input, :$debug, :$mode) {
+        my $in = Buf.new($input);
+        # Chop off first tag and length
+        self!get-tag($in);
+        self!get-length($in);
+        self.parse($in, $!type, :$debug, :$mode);
     }
+
+    multi method parse(Buf $input is rw, ASNSequence $type, :$debug, :$mode) {
+        say "Parsing ASNSequence of type $type.^name()" if $debug;
+        my @params = do gather {
+            for $type.ASN-order.kv -> $i, $field {
+                if $input.elems == 0 {
+                    my $remain = $type.ASN-order[$i .. *].map(-> $attr {$type.^attributes.grep({$_.name eq $attr})[0]});
+                    unless $remain.map({ $_ ~~ Optional|DefaultValue }).all {
+                        die "Part of content is missing";
+                    }
+                    last;
+                }
+                my $attr = $type.^attributes.grep(*.name eq $field)[0];
+                my %params;
+                %params<name> = $field;
+                %params<choice> = $attr.type.ASN-choice if $attr.type ~~ ASNChoice;
+                %params<tag> = $attr.tag if $attr ~~ CustomTagged;
+                %params<type> = self!calculate-type($attr);
+                my $key = self!normalize-name($field);
+                my $asn-value = ASNValue.new(|%params);
+
+                next if $attr ~~ Optional|DefaultValue && self!check-optional($input, $asn-value);
+
+                my $value = self.parse($input, $asn-value, :$debug, :$mode);
+                take $key;
+                take self!post-process($value);
+            }
+        }
+        $type.bless(|Map.new(@params));
+    }
+
+    method !calculate-type($attr) {
+        my $is-sequence = $attr.type ~~ Positional;
+        given $attr {
+            when ASN::Types::UTF8String {
+                return $is-sequence ?? ASNSequenceOf[ASN::Types::UTF8String] !! ASN::Types::UTF8String;
+            }
+            when ASN::Types::OctetString {
+                return $is-sequence ?? ASNSequenceOf[ASN::Types::OctetString] !! ASN::Types::OctetString;
+            }
+            default {
+                return $is-sequence ?? ASNSequenceOf[$attr.type.of] !! $attr.type;
+            }
+        }
+        die "NYI for $attr.perl()";
+    }
+
+    method !post-process($value) {
+        return $value.map(*.value) if $value ~~ Positional && $value.of ~~ ASN::StringWrapper;
+        return $value.value if $value ~~ ASN::StringWrapper;
+        $value;
+    }
+
+    method !check-optional(Buf $input is rw, ASNValue $value) {
+        my $tag-to-be = self!calculate-tag($value);
+        my $tag = self!get-tag($input);
+        $input.unshift($tag);
+        $tag-to-be !~~ $tag;
+    }
+
+    multi method parse(Buf $input is rw, ASNSequenceOf $type, :$debug, :$mode) {
+        say "Parsing ASNSequenceOf of $type.type().perl()" if $debug;
+        my $values = Array[$type.type].new;
+        while $input {
+            my $tag = self!get-tag($input);
+            my $len = self!get-length($input);
+            my $asn-bytes = $input.subbuf(0, $len);
+            $input .= subbuf($len);
+            $values.push: self.parse($asn-bytes, $type.type, :$debug, :$mode);
+        }
+        $values;
+    }
+
+    multi method parse(Buf $input is rw, ASNChoice $choice, :$tag, :$debug, :$mode) {
+        say "Parsing ASNChoice with $tag.perl()" if $debug;
+        my $item-index = $tag +& 0b11011111;
+        if $tag +& 128 == 128 {
+            # APPLICATION tag
+            $item-index -= 128;
+        } elsif $tag +& 64 == 64 {
+            # Context-specific tag
+            $item-index -= 64;
+        } else {
+            # Universal tag
+        }
+
+        my $item = $choice.ASN-choice.grep({ (.value ~~ Pair ?? .value.key !! .value.ASN-tag-value) eq $item-index })[0];
+        my $value-type = $item.value ~~ Pair ?? $item.value.value !! $item.value;
+        $choice.new(Pair.new($item.key, self.parse($input, $value-type, :$debug, :$mode)));
+    }
+
+    multi method parse(Buf $input is rw, ASNValue $value, :$debug, :$mode) {
+        my $tag = self!get-tag($input);
+        my $length = self!get-length($input);
+        my $asn-bytes = $input.subbuf(0, $length);
+        $input .= subbuf($length);
+        self.parse($asn-bytes, $value.type, :$tag, :$debug, :$mode);
+    }
+
     method !get-tag(Buf $input is rw --> Int) {
         my $tag = $input[0];
         $input .= subbuf(1);
@@ -43,45 +127,34 @@ class Parser {
         }
     }
 
-    method !parse-asn(Buf $input is rw, Int $tag, Int $length, ASNValue $value, :$debug) {
-        say "Index parsed is $tag" if $debug;
-        say "Length of value is $length" if $debug;
-
-        my $tag-to-be = self!calculate-tag($value);
-        # Return default value right now
-        if $tag-to-be !~~ $tag {
-            with $value.default {
-                say "Returned default value $_.perl()" if $debug;
-                $input.prepend($tag, $length);
-                return $_;
-            }
-            die "Incorrect tag, expected $tag-to-be.perl(), got $tag";
-        }
-
-        my $read-value = $input.subbuf(0, $length);
-        $input .= subbuf($length);
-
-        $value.choice.defined ??
-                self!parse-choice($tag, $read-value, $value, :$debug) !!
-                self.parse($read-value, $value.type, :$debug);
-    }
     method !calculate-tag(ASNValue $value) {
         my $tag = 0;
+        with $value.tag {
+            my $tag = $_ + 128;
+            $tag += 32 if $value.type ~~ ASNSequence|ASNSequenceOf|ASNSet|ASNSetOf;
+            return $tag;
+        }
         $tag += do given $value.type {
-            when ASN::UTF8String {
-                12
+            when Bool {
+                1
             }
             when $_ ~~ Int && $_.HOW ~~ Metamodel::ClassHOW {
                 2
             }
-            when ASN::OctetString {
+            when ASN::Types::OctetString {
                 4
+            }
+            when ASN-Null {
+                5
             }
             when $_ ~~ Enumeration && $_.HOW ~~ Metamodel::EnumHOW {
                 10
             }
+            when ASN::Types::UTF8String {
+                12
+            }
             when Positional {
-                48
+                16
             }
         }
         with $value.choice {
@@ -105,31 +178,6 @@ class Parser {
         @opts.any;
     }
 
-    method !parse-choice(Int $index, Buf $input is rw, ASNValue $value, :$debug) {
-        say "Parsing CHOICE on $value.choice().perl() out of $input.perl(), index is $index" if $debug;
-
-        my $item-index = $index +& 0b11011111;
-        # Clear complex type bit if present
-        if $index +& 64 == 64 {
-        # APPLICATION tag
-            $item-index -= 64;
-        } elsif $index +& 128 == 128 {
-        # Context-specific tag
-            $item-index -= 128;
-        } else {
-        # Universal tag
-        }
-
-        my $item = $value.choice.grep({ (.value ~~ Pair ?? .value.key !! .value.ASN-tag-value) eq $item-index })[0];
-        my $value-type = $item.value ~~ Pair ?? $item.value.value !! $item.value;
-        if $value-type.^roles.grep({ .^name eq 'ASNType' }).elems == 1 {
-            $input.unshift($index, $input.elems);
-            $item.key => $value-type.parse($input, :$debug);
-        } else {
-            $item.key => self.parse($input, $value-type, :$debug);
-        }
-    }
-
     method !normalize-name(Str $name) {
         ~("$name" ~~ / \w .+ /)
     }
@@ -143,19 +191,24 @@ class Parser {
         $total;
     }
 
-    multi method parse(Buf $input is rw, ASN::UTF8String $str, :$debug) {
+    multi method parse(Buf $input is rw, ASN::Types::UTF8String $str, :$debug) {
         my $decoded = $input.decode();
         say "Parsing `$decoded.perl()` out of $input.perl()" if $debug;
         $str.new($decoded);
     }
 
-    multi method parse(Buf $input is rw, ASN::OctetString $str, :$debug) {
+    multi method parse(Buf $input is rw, ASN::Types::OctetString $str, :$debug) {
         my $decoded = $input.map({ .base(16) }).join;
         say "Parsing `$decoded.perl()` out of $input.perl()" if $debug;
         $str.new($decoded);
     }
 
-    multi method parse(Buf $input is rw, $enum-type where $enum-type.HOW ~~ Metamodel::EnumHOW, :$debug) {
+    multi method parse(Buf $input is rw, Bool $bool, :$debug, :$mode) {
+        my $value = $input[0];
+        return $value != 0;
+    }
+
+    multi method parse(Buf $input is rw, $enum-type where $enum-type.HOW ~~ Metamodel::EnumHOW, :$debug, :$mode) {
         say "Parsing `$input[0]` out of $input.perl()" if $debug;
         $enum-type($input[0]);
     }
@@ -163,18 +216,5 @@ class Parser {
     multi method parse(Buf $input, ASN-Null $type, :$debug) {
         say "Parsing NULL out of $input.perl()" if $debug;
         $type.new;
-    }
-
-    multi method parse(Buf $input is rw, Positional $a, :$debug --> Array) {
-        say "Parsing SEQUENCE out of $input.perl()" if $debug;
-        my @a;
-        loop {
-            my $length = $input[1];
-            my $data = $input.subbuf(2, $length);
-            @a.push: self.parse($data, $a.of);
-            $input .= subbuf($length + 2);
-            last if $input.elems == 0;
-        }
-        @a;
     }
 }
