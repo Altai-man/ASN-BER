@@ -32,10 +32,7 @@ class ASN-Null {}
 role ASN::StringWrapper {
     has Str $.value;
 
-    # We _want_ it to be inherited, so `method` here,
-    # instead of `submethod`
-    method new(Str $value) { self.bless(:$value) }
-    method BUILD(Str :$!value) {}
+    submethod new(Str $value) { self.bless(:$value) }
 }
 
 role ASN::Types::UTF8String does ASN::StringWrapper {}
