@@ -5,16 +5,8 @@ use Test;
 enum Fuel <Solid Liquid Gas>;
 
 class SpeedChoice does ASNChoice {
-    has $.value;
-
-    method new($value) { self.bless(:$value) }
-
     method ASN-choice() {
         { mph => (1 => Int), kmph => (0 => Int) }
-    }
-
-    method ASN-value() {
-        $!value;
     }
 }
 

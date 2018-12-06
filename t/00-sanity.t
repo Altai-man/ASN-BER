@@ -6,16 +6,8 @@ use Test;
 enum Fuel <Solid Liquid Gas>;
 
 class SpeedChoice does ASNChoice {
-    has $.value;
-
-    method new($value) { self.bless(:$value) }
-
     method ASN-choice() {
         { mph => (1 => Int), kmph => (0 => Int) }
-    }
-
-    method ASN-value() {
-        $!value;
     }
 }
 
@@ -54,10 +46,9 @@ my $rocket-ber = Blob.new(
 my $rocket = Rocket.new(
         name => 'Falcon',
         fuel => Solid,
-        speed => SpeedChoice.new(Pair.new('mph', 18000)),
-        payload => [
-            "Car", "GPS"
-        ]);
+        speed => SpeedChoice.new((mph => 18000)),
+        payload => ["Car", "GPS"]
+);
 
 is-deeply ASN::Serializer.serialize($rocket, :mode(Implicit)), $rocket-ber, "Correctly serialized a Rocket in implicit mode";
 

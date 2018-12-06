@@ -18,8 +18,12 @@ role ASNSetOf[$type] {
 }
 
 role ASNChoice {
+    has $.choice-value;
+
     method ASN-choice() {...}
-    method ASN-value() {...}
+    method ASN-value() { $!choice-value }
+
+    method new($choice-value) { $?CLASS.bless(:$choice-value) }
 }
 
 # String traits

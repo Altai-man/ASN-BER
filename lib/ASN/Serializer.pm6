@@ -95,7 +95,7 @@ class ASN::Serializer {
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($buf))), |$buf);
     }
 
-    # SEQUENCE
+    # Positional
     multi method serialize(Positional $sequence, Int $index is copy = 16, :$debug, :$mode) {
         # COMPLEX element, so add 32
         $index += 32 if $index != -1;
