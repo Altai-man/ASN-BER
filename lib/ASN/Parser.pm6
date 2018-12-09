@@ -3,11 +3,19 @@ use ASN::Types;
 class ASN::Parser {
     has $.type;
 
-    multi method parse(Blob $input, :$debug, :$mode) {
+    method is-complete(Blob $input is copy --> Bool) {
+        my $tag = self.get-tag($input);
+        my $len = self.get-length($input);
+        $len <= $input.elems;
+    }
+
+    multi method parse(Blob $input, :$debug, :$mode, :$to-chop = True) {
         my $in = Buf.new($input);
         # Chop off first tag and length
-        self!get-tag($in);
-        self!get-length($in);
+        if $to-chop {
+            self.get-tag($in);
+            self.get-length($in);
+        }
         self.parse($in, $!type, :$debug, :$mode);
     }
 
@@ -65,7 +73,7 @@ class ASN::Parser {
 
     method !check-optional(Buf $input is rw, ASNValue $value) {
         my $tag-to-be = self!calculate-tag($value);
-        my $tag = self!get-tag($input);
+        my $tag = self.get-tag($input);
         $input.unshift($tag);
         $tag-to-be !~~ $tag;
     }
@@ -74,8 +82,8 @@ class ASN::Parser {
         say "Parsing ASNSequenceOf of $type.type().perl()" if $debug;
         my $values = Array[$type.type].new;
         while $input {
-            my $tag = self!get-tag($input);
-            my $len = self!get-length($input);
+            my $tag = self.get-tag($input);
+            my $len = self.get-length($input);
             my $asn-bytes = $input.subbuf(0, $len);
             $input .= subbuf($len);
             $values.push: self.parse($asn-bytes, $type.type, :$debug, :$mode);
@@ -102,27 +110,27 @@ class ASN::Parser {
     }
 
     multi method parse(Buf $input is rw, ASNValue $value, :$debug, :$mode) {
-        my $tag = self!get-tag($input);
-        my $length = self!get-length($input);
+        my $tag = self.get-tag($input);
+        my $length = self.get-length($input);
         my $asn-bytes = $input.subbuf(0, $length);
         $input .= subbuf($length);
         self.parse($asn-bytes, $value.type, :$tag, :$debug, :$mode);
     }
 
-    method !get-tag(Buf $input is rw --> Int) {
+    method get-tag(Buf $input is rw, :$immutable = False --> Int) {
         my $tag = $input[0];
-        $input .= subbuf(1);
+        $input .= subbuf(1) unless $immutable;
         $tag;
     }
 
-    method !get-length(Buf $input is rw --> Int) {
+    method get-length(Buf $input is rw, :$immutable = False --> Int) {
         my $length = $input[0];
         if $length <= 127 {
-            $input .= subbuf(1);
+            $input .= subbuf(1) unless $immutable;
             return $length;
         } else {
             my $octets = $input.subbuf(1, $length - 128);
-            $input .= subbuf($length - 127);
+            $input .= subbuf($length - 127) unless $immutable;
             return self.parse($octets, Int);
         }
     }
