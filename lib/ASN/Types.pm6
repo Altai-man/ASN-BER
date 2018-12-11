@@ -13,7 +13,7 @@ role ASNSequenceOf[$type] {
 role ASNSet {
 }
 
-role ASNSetOf[$type] {
+role ASNSetOf[$type] is Set {
     method type { $type }
 }
 
