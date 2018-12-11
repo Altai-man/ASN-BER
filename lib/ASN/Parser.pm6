@@ -206,7 +206,7 @@ class ASN::Parser {
     }
 
     multi method parse(Buf $input is rw, ASN::Types::OctetString $str, :$debug) {
-        my $decoded = $input.map({ .base(16) }).join;
+        my $decoded = $input.decode;
         say "Parsing `$decoded.perl()` out of $input.perl()" if $debug;
         $str.new($decoded);
     }

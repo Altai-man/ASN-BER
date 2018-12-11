@@ -90,7 +90,7 @@ class ASN::Serializer {
 
     # OctetString
     multi method serialize(ASN::Types::OctetString $str, Int $index = 4, :$debug) {
-        my $buf =  Buf.new($str.value.comb(2).map('0x' ~ *).map(*.Int));
+        my $buf =  $str.value.encode;
         say "Encoding OctetString ($str.value() with index $index, resulting in $buf.perl()" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($buf))), |$buf);
     }
