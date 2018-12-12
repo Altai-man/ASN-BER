@@ -1,53 +1,10 @@
 use ASN::Types;
 
 class ASN::Serializer {
-    my %string-types = 'ASN::Types::UTF8String' => ASN::Types::UTF8String;
-
-    multi method serialize(ASNSequence $sequence, Int $index = 48, :$debug, :$mode = Implicit) {
-        my Blob $res = Buf.new;
-        say "Encoding ASNSequence in $sequence.ASN-order().perl()" if $debug;
-        for $sequence.ASN-order -> $field {
-            my $attr = $sequence.^attributes.grep(*.name eq $field)[0];
-            # Params
-            my %params;
-            %params<name> = $field;
-            %params<default> = $attr.default-value if $attr ~~ DefaultValue;
-            %params<tag> = $attr.tag if $attr ~~ CustomTagged;
-            my $value = $attr.get_value($sequence);
-
-            next if $attr ~~ Optional && (!$value.defined || $value ~~ Positional && $value.elems == 0);
-
-            %params<value> = $value;
-            if $attr ~~ ASN::Types::UTF8String {
-                %params<type> = ASN::Types::UTF8String;
-            } elsif $attr ~~ ASN::Types::OctetString {
-                %params<type> = ASN::Types::OctetString;
-            }
-            $res.push(self.serialize(ASNValue.new(|%params), :$debug, :$mode));
-        }
-        Blob.new(|($index == -1 ?? () !! ($index, |self!calculate-len($res))), |$res);
-    }
-
-    multi method serialize(ASNSetOf $set, Int $index = 49, :$debug, :$mode) {
-        my $temp = Buf.new;
-        for @$set.keys {
-            $temp.push(self.serialize($_));
-        }
-        Blob.new(|($index == -1 ?? () !! ($index, |self!calculate-len($temp))), |$temp);
-    }
-
-    method !calculate-len(Blob $value, :$infinite) {
-        with $infinite {
-            return Buf.new(128);
-        }
-        if $value.elems <= 127 {
-            return Buf.new($value.elems);
-        }
-        my $long = self.serialize($value.elems, -1);
-        if $long.elems > 126 {
-            die "The value is too long, please use streaming";
-        }
-        return Buf.new($long.elems + 128, |$long);
+# BOOLEAN
+    multi method serialize(Bool $bool, Int $index = 1, :$debug, :$mode) {
+        say "Encoding Bool ($bool) with index $index" if $debug;
+        self!pack($index, Buf.new($bool ?? 255 !! 0));
     }
 
     # INTEGER
@@ -68,52 +25,77 @@ class ASN::Serializer {
         }
 
         say "Encoding Int ($int) with index $index, resulting in $int-encoded.reverse().perl()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($int-encoded))), |$int-encoded.reverse);
+        self!pack($index, $int-encoded.reverse);
+    }
+
+    # OctetString
+    multi method serialize(ASN::Types::OctetString $str, Int $index = 4, :$debug) {
+        my $value-cut = $str.value.substr(0, 10);
+        my $buf =  $str.value.encode;
+        say "Encoding OctetString ({ $buf.elems > 10 ?? "$value-cut..." !! $value-cut }) with index $index" if $debug;
+        self!pack($index, $buf);
     }
 
     # NULL
     multi method serialize(ASN-Null, Int $index = 5, :$debug, :$mode) {
-        Buf.new(|($index == -1 ?? () !! ($index, 0)));
-    }
-
-    # BOOLEAN
-    multi method serialize(Bool $bool, Int $index = 1, :$debug, :$mode) {
-        say "Encoding Bool ($bool with index $index" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, 1)), $bool ?? 255 !! 0);
+        say "Encoding Null with indexx $index" if $debug;
+        self!pack($index, Buf.new);
     }
 
     # ENUMERATED
     multi method serialize($enum-value where $enum-value.HOW ~~ Metamodel::EnumHOW, Int $index = 10, :$debug, :$mode) {
         my $encoded = $enum-value.^enum_values.Hash{$enum-value};
         say "Encoding Enum ($enum-value) with index $index, resulting in $encoded" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, 1)), $encoded);
+        self!pack($index, Buf.new($encoded));
     }
 
     # UTF8String
     multi method serialize(ASN::Types::UTF8String $str, Int $index = 12, :$debug) {
-        my $encoded = Buf.new($str.value.encode);
-        say "Encoding UTF8String ($str.value() with index $index, resulting in $encoded.perl()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($encoded))), |$encoded);
+        my $value-cut = $str.value.substr(0, 10);
+        my $buf = $str.value.encode;
+        say "Encoding UTF8String ({ $buf.elems > 10 ?? "$value-cut..." !! $value-cut }) with index $index" if $debug;
+        self!pack($index, $buf);
     }
 
-    # OctetString
-    multi method serialize(ASN::Types::OctetString $str, Int $index = 4, :$debug) {
-        my $buf =  $str.value.encode;
-        say "Encoding OctetString ($str.value() with index $index, resulting in $buf.perl()" if $debug;
-        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($buf))), |$buf);
-    }
+    multi method serialize(ASNSequence $sequence, Int $index is copy = 48, :$debug, :$mode = Implicit) {
+        $index += 32 unless $index ~~ 48|-1;
+        my Blob $res = Buf.new;
+        say "Encoding ASNSequence $sequence.^name() as $sequence.ASN-order().perl()" if $debug;
+        for $sequence.ASN-order -> $field {
+            my $attr = $sequence.^attributes.grep(*.name eq $field)[0];
+            # Params
+            my %params;
+            %params<default> = $attr.default-value if $attr ~~ DefaultValue;
+            %params<tag> = $attr.tag if $attr ~~ CustomTagged;
 
-    # Positional
-    multi method serialize(Positional $sequence, Int $index is copy = 16, :$debug, :$mode) {
-        # COMPLEX element, so add 32
-        $index += 32 if $index != -1;
-        my $temp = Buf.new;
-        say "Encoding Sequence ($sequence.perl()) with index $index into:" if $debug;
-        for @$sequence -> $attr {
-            $temp.append(self.serialize($attr, :$debug, :$mode));
+            my $value = $attr.get_value($sequence);
+            next if $attr ~~ Optional && (!$value.defined || $value ~~ Positional && !$value.elems);
+            %params<value> = $value;
+
+            if $attr ~~ ASN::Types::UTF8String {
+                %params<type> = ASN::Types::UTF8String;
+            } elsif $attr ~~ ASN::Types::OctetString {
+                %params<type> = ASN::Types::OctetString;
+            }
+            $res.push(self.serialize(ASNValue.new(|%params), :$debug, :$mode));
         }
-        # Tag + Length + Value
-        Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($temp))), |$temp);
+        self!pack($index, $res);
+    }
+
+    # SEQUENCE OF
+    multi method serialize(Positional $sequence, Int $index is copy = 48, :$debug, :$mode) {
+        $index += 32 unless $index ~~ 48|-1;
+        say "Encoding SEQUENCE OF with index $index into:" if $debug;
+        my $res = do gather { take self.serialize($_, :$debug, :$mode) for @$sequence };
+        self!pack($index, [~] $res);
+    }
+
+    # SET OF
+    multi method serialize(ASNSetOf $set, Int $index = 49, :$debug, :$mode) {
+        $index += 32 unless $index ~~ 49|-1;
+        say "Encoding SET OF with index $index into:" if $debug;
+        my $res = do gather { take self.serialize($_, :$debug, :$mode) for @$set.keys };
+        self!pack($index, [~] $res);
     }
 
     # Common method to enforce custom traits for ASNValue value
@@ -139,7 +121,7 @@ class ASN::Serializer {
         self.serialize($value, |( $_ + 128 with $asn-node.tag), :$debug, :$mode);
     }
 
-    # CHOICE
+    # CHOICE has to be handled specially
     multi method serialize(ASNChoice $choice, :$debug, :$mode) {
         my $description = $choice.ASN-choice;
         my $choice-item = $description{$choice.ASN-value.key};
@@ -165,7 +147,29 @@ class ASN::Serializer {
     }
 
     # Dying method to detect types not yet implemented
-    multi method serialize($common, :$debug) {
-        die "NYI for: $common.perl()";
+    multi method serialize($unknown-type, :$debug) {
+        die "NYI for: $unknown-type.perl()";
+    }
+
+    method !pack($index, $value) {
+        if $index == -1 {
+            Buf.new($value);
+        } else {
+            Buf.new($index, |self!calculate-len($value), |$value);
+        }
+    }
+
+    method !calculate-len(Blob $value, :$infinite) {
+        with $infinite {
+            return Buf.new(128);
+        }
+        if $value.elems <= 127 {
+            return Buf.new($value.elems);
+        }
+        my $long = self.serialize($value.elems, -1);
+        if $long.elems > 126 {
+            die "The value is too long, please use streaming";
+        }
+        return Buf.new($long.elems + 128, |$long);
     }
 }
