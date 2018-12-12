@@ -74,17 +74,10 @@ multi trait_mod:<is>(Attribute $attr, :$tagged) is export {
 }
 
 class ASNValue {
-    # Common attributes
-    has $.name;
-    has $.type;
     has $.tag is rw;
-
-    # Custom ones
-    has $.default;
-    has $.choice;
-    has $.optional = False;
+    has $.type;
     has $.value;
-    has $.is-pos = False;
+    has $.default;
 }
 
 our $primitive-type is export = Int | Str | ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null;

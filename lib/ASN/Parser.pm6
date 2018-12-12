@@ -33,7 +33,6 @@ class ASN::Parser {
                 my $attr = $type.^attributes.grep(*.name eq $field)[0];
                 my %params;
                 %params<name> = $field;
-                %params<choice> = $attr.type.ASN-choice if $attr.type ~~ ASNChoice;
                 %params<tag> = $attr.tag if $attr ~~ CustomTagged;
                 %params<type> = self!calculate-type($attr);
                 my $key = self!normalize-name($field);
@@ -165,15 +164,13 @@ class ASN::Parser {
                 16
             }
         }
-        with $value.choice {
-            return self!convert-choice-to-tags($_);
-        }
+        return self!convert-choice-to-tags($value.type) if $value.type ~~ ASNChoice;
         $tag;
     }
 
-    method !convert-choice-to-tags($choice) {
+    method !convert-choice-to-tags(ASNChoice $choice) {
         my @opts = gather {
-            for @$choice -> $option {
+            for @($choice.ASN-choice) -> $option {
                 if $option.value ~~ Pair {
                     take $option.value.key.Int + 128;
                 } else {
