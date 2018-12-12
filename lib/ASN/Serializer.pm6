@@ -28,6 +28,14 @@ class ASN::Serializer {
         Blob.new(|($index == -1 ?? () !! ($index, |self!calculate-len($res))), |$res);
     }
 
+    multi method serialize(ASNSetOf $set, Int $index = 49, :$debug, :$mode) {
+        my $temp = Buf.new;
+        for @$set.keys {
+            $temp.push(self.serialize($_));
+        }
+        Blob.new(|($index == -1 ?? () !! ($index, |self!calculate-len($temp))), |$temp);
+    }
+
     method !calculate-len(Blob $value, :$infinite) {
         with $infinite {
             return Buf.new(128);
