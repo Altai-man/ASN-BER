@@ -4,7 +4,7 @@ This module is designed to allow one make Perl 6 types support encoding and deco
 
 #### Warnings
 
-* This is an _alpha_. A lot of universal types are not even described and papercuts are everywhere.
+* This is a beta release. Number of universal types is not even described and papercuts are possible.
 * Main driving power beneath this is a desire to avoid writing every LDAP type
 parsing and serializing code by hands. As a result, while some means to have more generic support
 of ASN.1 are being prepared, contributing code to support greater variety of ASN.1 definitions
@@ -12,7 +12,7 @@ being expressed and handled correctly is appreciated.
 
 #### Synopsis
 
-```Perl6
+```perl6
 #`[
 World-Schema DEFINITIONS IMPLICIT TAGS ::=
 BEGIN
@@ -35,12 +35,11 @@ END
 use ASN::Types;
 use ASN::Serializer;
 use ASN::Parser;
-use Test;
 
 # ENUMERATED is expressed as enum
 enum Fuel <Solid Liquid Gas>;
 
-# Mark our class as ASNType
+# Mark CHOICE type as ASNChoice
 class SpeedChoice does ASNChoice {
     method ASN-choice() {
         # Description of choice names, tags, types
@@ -48,6 +47,7 @@ class SpeedChoice does ASNChoice {
     }
 }
 
+# Mark our SEQUENCE as ASNSequence
 class Rocket does ASNType {
     has Str $.name is UTF8String; # UTF8String
     has Str $.message is default-value("Hello World") is UTF8String; # DEFAULT
@@ -56,7 +56,7 @@ class Rocket does ASNType {
     has Str @.payload is UTF8String; # SEQUENCE OF UTF8String
 
     # `ASN-order` method is a single _necessary_ method
-    # which describes order of attributes of type (here - SEQUENCE) to be encoded
+    # which describes an order of attributes of type (here - SEQUENCE) to be encoded/decoded
     method ASN-order() {
         <$!name $!message $!fuel $!speed @!payload>
     }
@@ -69,7 +69,7 @@ my $rocket = Rocket.new(
         payload => ["Car", "GPS"]
 );
 
-say ASN::Serializer.serialize($rocket, :mode(Implicit)); # currently, only IMPLICIT tag schema is supported
+say ASN::Serializer.serialize($rocket, :mode(Implicit)); # for now only IMPLICIT tag schema is supported and flag is not really used
 # `ASN::Serializer.serialize($rocket, :debug)` - `debug` named argument enables printing of basic debugging messages
 
 # Result: Blob.new(
@@ -87,7 +87,7 @@ say ASN::Parser.new(:type(Rocket)).parse($rocket-encoding-result, :mode(Implicit
 
 #### ASN.1 "traits" handling rules
 
-**This part is a design draft that might be changed in case of any issue that hinders development of LDAP**
+**This part is a design draft that might be changed in case if any issue that hinders development of LDAP will de discovered**
 
 The main concept is to avoid unnecessary creation of new types that just serve as envelopes for
 actual data and avoid boilerplate related to using such intermediate types. Hence, when possible,
@@ -95,8 +95,8 @@ we try to use native types and traits.
 
 #### Tagging schema
 
-For now, encoding is done as if `DEFINITIONS IMPLICIT TAGS` is applied for an outermost type (i.e. "module").
-Setting of other schemes is expected to be able to work via named argument passed to `serialize`|`parse` methods.
+For now, encoding is done as if `DEFINITIONS IMPLICIT TAGS` is applied for an outermost ASN.1 unit (i.e. "module").
+Setting of other schemes is expected to be able to work via named argument passed to `serialize`|`parse` methods, yet this is not yet implemented.
 
 #### Mapping from ASN.1 type to ASN::BER format
 
@@ -116,6 +116,7 @@ Universal types are mostly handled with Perl 6 native types, currently implement
 | ENUMERATED      | enum                           |
 | SEQUENCE        | class implementing ASNSequence |
 | SEQUENCE OF Foo | Foo @.sequence                 |
+| SET OF Foo      | ASNSetOf\[Foo\]                |
 | CHOICE          | ASNChioce                      |
 
 * User defined types (`LDAPDN ::= LDAPString`)
@@ -129,7 +130,7 @@ LDAPDN ::= LDAPString
 
 results in
 
-```
+```perl6
 has Str $.ldapdn is OctetString; # Ignore level of indirectness in type
 ```
 
@@ -143,15 +144,20 @@ They are handled correctly if nested, so `a ::= SEQUENCE { ..., b SEQUENCE {...}
 
 * SEQUENCE OF elements
 
-`has Foo @.foos`
+Array sigil may be used `has Foo @.foos`. In future, possibly more generic way of writing will be provided.
 
 * SET elements (`Foo ::= SET {}`)
 
-Not yet implemented, potentially handling might be done the same way as `SEQUENCE` and `SEQUENCE OF`.
+Not yet implemented, though typed `SET OF` can be done with:
+
+```perl6
+has ASNSetOf[Int] $.values;
+submethod BUILD(Set :$values) { self.bless(values => ASNSetOf[Int].new($values)) }
+```
 
 * CHOICE elements
 
-CHOICE elements are implemented using `ASNChoice` role applying.
+CHOICE elements are implemented by `ASNChoice` role applying.
 For same types tagging must be used to avoid ambiguity, it is usually done using context-specific tags.
 
 ```
@@ -170,8 +176,10 @@ becomes
 
 ```
 class AuthChoice is ASNChoice {
-    # We are returning a Hash which holds a simple description of CHOICE structure
-    # for cases where tag has an APPLICATION class, see example below
+    # This example depicts a CHOICE with context-specific tags being provided
+    # For cases where tag has an APPLICATION class, see example below
+    # We are returning a Hash which holds a description of the CHOICE structure,
+    # (name => (tag => type))
     method ASN-choice {
         { simple => (0 => ASN::Types::OctetString),
           sasl   => (3 => Cro::LDAP::Authentication::SaslCredentials) }
@@ -186,7 +194,7 @@ class A {
 A.new(..., authentication => (simple => "466F6F"));
 ```
 
-`simple` is a key for the internal pair, which consists of a tag and a CHOICE option type.
+`simple` is a key for the internal pair, which consists of a tag to use and a CHOICE option type.
 
 Another option, when there is no ambiguity, are usages of
 
@@ -194,7 +202,7 @@ Another option, when there is no ambiguity, are usages of
 
 * User-defined type with `APPLICATION`-wide tag.
 
-If ASN.1 declares tag APPLICATION-wide, for example:
+If ASN.1 has APPLICATION-wide tag declared, for example:
 
 ```
 BindRequest ::= [APPLICATION 0] SEQUENCE {
@@ -202,7 +210,7 @@ BindRequest ::= [APPLICATION 0] SEQUENCE {
 }
 ```
 
-it might be expressed implementing `ASN-tag-value` method like that:
+it might be expressed implementing `ASN-tag-value`:
 
 ```
 class BindRequest does ASNSequence {
@@ -211,7 +219,7 @@ class BindRequest does ASNSequence {
 }
 ```
 
-In this case, when the type is used as a part of a CHOICE, internal pair of CHOICE values is replaced with a simple type:
+In this case, when such type is used as a part of a CHOICE, internal pair of CHOICE values is replaced with just a type:
 
 ```
 class ProtocolChoice does ASNChoice {
