@@ -13,7 +13,7 @@
     "description": "ASN.1 BER encoding and decoding tool",
     "resources": [],
     "perl": "6.c",
-    "version": "0.1",
+    "version": "0.5",
     "authors": ["Alexander Kiryuhin <alexander.kiryuhin@gmail.com>"]
 }
 1
