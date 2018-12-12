@@ -80,4 +80,6 @@ class ASNValue {
     has $.default;
 }
 
-our $primitive-type is export = Int | Str | ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null;
+our $primitive-type is export =
+        Int | Str | Bool |
+        ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null;
