@@ -94,7 +94,7 @@ class ASN::Serializer {
     multi method serialize(ASNSetOf $set, Int $index = 49, :$debug, :$mode) {
         $index += 32 unless $index ~~ 49|-1;
         say "Encoding SET OF with index $index into:" if $debug;
-        my $res = do gather { take self.serialize($_, :$debug, :$mode) for @$set.keys };
+        my $res = do gather { take self.serialize($_ ~~ Str ?? $set.type.new($_) !! $_, :$debug, :$mode) for $set.keys };
         self!pack($index, [~] $res);
     }
 
