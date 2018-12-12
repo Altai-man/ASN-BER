@@ -90,6 +90,20 @@ class ASN::Parser {
         $values;
     }
 
+    multi method parse(Buf $input is rw, ASNSetOf $type, :$debug, :$mode) {
+        my Array $set .= new;
+        while $input.elems != 0 {
+            my $tag = self.get-tag($input);
+            my $len = self.get-length($input);
+            my $asn-bytes = $input.subbuf(0, $len);
+            $input .= subbuf($len);
+            # We want to get user hassle-free conversion into Str, even if
+            # wrapper is specified
+            $set.push: self!post-process(self.parse($asn-bytes, $type.type, :$debug, :$mode));
+        }
+        $type.new(|$set);
+    }
+
     multi method parse(Buf $input is rw, ASNChoice $choice, :$tag, :$debug, :$mode) {
         say "Parsing ASNChoice with $tag.perl()" if $debug;
         my $item-index = $tag +& 0b11011111;
