@@ -86,7 +86,8 @@ class ASN::Serializer {
     multi method serialize(@sequence, Int $index is copy = 48, :$debug, :$mode) {
         $index += 32 unless $index ~~ 48|-1;
         say "Encoding SEQUENCE OF with index $index into:" if $debug;
-        my $res = do gather { take self.serialize($_, :$debug, :$mode) for @sequence };
+        my $res = do gather { my $type = @sequence.of;
+        take self.serialize($type ~~ ASN::StringWrapper ?? $type.new($_) !! $_, :$debug, :$mode) for @sequence };
         self!pack($index, [~] $res);
     }
 
@@ -94,7 +95,7 @@ class ASN::Serializer {
     multi method serialize(ASNSetOf $set, Int $index = 49, :$debug, :$mode) {
         $index += 32 unless $index ~~ 49|-1;
         say "Encoding SET OF with index $index into:" if $debug;
-        my $res = do gather { take self.serialize($_ ~~ Str ?? $set.type.new($_) !! $_, :$debug, :$mode) for $set.keys };
+        my $res = do gather { take self.serialize($set.type ~~ ASN::StringWrapper ?? $set.type.new($_) !! $_, :$debug, :$mode) for $set.keys };
         self!pack($index, [~] $res);
     }
 

@@ -77,30 +77,27 @@ class ASN::Parser {
         $tag-to-be !~~ $tag;
     }
 
+    method !parse-sequence(Buf $input is rw, $type, $holder) {
+        while $input.elems != 0 {
+            self.get-tag($input);
+            my $len = self.get-length($input);
+            my $piece-bytes = $input.subbuf(0, $len);
+            $input .= subbuf($len);
+            $holder.push: self!post-process(self.parse($piece-bytes, $type));
+        }
+        $holder;
+    }
+
     multi method parse(Buf $input is rw, ASNSequenceOf $type, :$debug, :$mode) {
         say "Parsing ASNSequenceOf of $type.type().perl()" if $debug;
-        my $values = Array[$type.type].new;
-        while $input {
-            my $tag = self.get-tag($input);
-            my $len = self.get-length($input);
-            my $asn-bytes = $input.subbuf(0, $len);
-            $input .= subbuf($len);
-            $values.push: self.parse($asn-bytes, $type.type, :$debug, :$mode);
-        }
+        my Array $values .= new;
+        self!parse-sequence($input, $type.type, $values);
         $values;
     }
 
     multi method parse(Buf $input is rw, ASNSetOf $type, :$debug, :$mode) {
         my Array $set .= new;
-        while $input.elems != 0 {
-            my $tag = self.get-tag($input);
-            my $len = self.get-length($input);
-            my $asn-bytes = $input.subbuf(0, $len);
-            $input .= subbuf($len);
-            # We want to get user hassle-free conversion into Str, even if
-            # wrapper is specified
-            $set.push: self!post-process(self.parse($asn-bytes, $type.type, :$debug, :$mode));
-        }
+        self!parse-sequence($input, $type.type, $set);
         $type.new(|$set);
     }
 
@@ -199,6 +196,13 @@ class ASN::Parser {
 
     method !normalize-name(Str $name) {
         ~("$name" ~~ / \w .+ /)
+    }
+
+    multi method parse(Buf $input is rw, @positional, :$debug, :$mode) {
+        my $type = @positional.of;
+        my @temp;
+        self!parse-sequence($input, $type, @temp);
+        @positional.new(@temp);
     }
 
     multi method parse(Buf $input is rw, Int $type where $type.HOW ~~ Metamodel::ClassHOW, :$debug) {
