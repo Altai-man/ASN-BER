@@ -83,10 +83,10 @@ class ASN::Serializer {
     }
 
     # SEQUENCE OF
-    multi method serialize(Positional $sequence, Int $index is copy = 48, :$debug, :$mode) {
+    multi method serialize(@sequence, Int $index is copy = 48, :$debug, :$mode) {
         $index += 32 unless $index ~~ 48|-1;
         say "Encoding SEQUENCE OF with index $index into:" if $debug;
-        my $res = do gather { take self.serialize($_, :$debug, :$mode) for @$sequence };
+        my $res = do gather { take self.serialize($_, :$debug, :$mode) for @sequence };
         self!pack($index, [~] $res);
     }
 
