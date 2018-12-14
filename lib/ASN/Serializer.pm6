@@ -106,7 +106,7 @@ class ASN::Serializer {
 
         # Don't serialize undefined values of type with a default
         return Buf.new if $asn-node.default eqv $value;
-        return self.serialize($asn-node.type.new($value), :$debug, :$mode) if $value ~~ Str;
+        return self.serialize($asn-node.type.new($value), |($_ + 128 with $asn-node.tag) :$debug, :$mode) if $value ~~ Str;
 
         if $value ~~ Positional {
             $value = $value.map({
@@ -119,7 +119,7 @@ class ASN::Serializer {
                 }
             });
         }
-        self.serialize($value, |( $_ + 128 with $asn-node.tag), :$debug, :$mode);
+        self.serialize($value, |($_ + 128 with $asn-node.tag), :$debug, :$mode);
     }
 
     # CHOICE has to be handled specially
