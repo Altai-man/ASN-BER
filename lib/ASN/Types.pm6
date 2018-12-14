@@ -32,7 +32,7 @@ class ASN-Null {}
 role ASN::StringWrapper {
     has Str $.value;
 
-    submethod new(Str $value) { self.bless(:$value) }
+    method new(Str $value) { self.bless(:$value) }
 }
 
 role ASN::Types::UTF8String does ASN::StringWrapper {}
