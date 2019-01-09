@@ -2,6 +2,7 @@
     "license": "Artistic-2.0",
     "source-url": "https://github.com/Altai-man/ASN-BER.git",
     "depends": [],
+    "auth": "github:Altai-man",
     "provides": {
         "ASN::Types": "lib/ASN/Types.pm6",
         "ASN::Parser": "lib/ASN/Parser.pm6",
