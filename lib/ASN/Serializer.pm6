@@ -44,7 +44,7 @@ class ASN::Serializer {
 
     # ENUMERATED
     multi method serialize($enum-value where $enum-value.HOW ~~ Metamodel::EnumHOW, Int $index = 10, :$debug, :$mode) {
-        my $encoded = $enum-value.^enum_values.Hash{$enum-value};
+        my $encoded = $enum-value.Int;
         say "Encoding Enum ($enum-value) with index $index, resulting in $encoded" if $debug;
         self!pack($index, Buf.new($encoded));
     }
