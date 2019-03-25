@@ -7,6 +7,8 @@ role ASNSequence {
 }
 
 role ASNSequenceOf[$type] {
+    has $.seq;
+
     method type { $type }
 }
 
