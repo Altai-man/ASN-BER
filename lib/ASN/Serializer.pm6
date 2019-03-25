@@ -89,10 +89,10 @@ class ASN::Serializer {
         return Buf.new unless $sequence.seq.all ~~ .defined;
         $index += 32 unless $index ~~ 48|-1;
         say "Encoding SEQUENCE OF with index $index into:" if $debug;
-        my $res = do gather {
-            my $type = $sequence.type;
-            take self.serialize($type ~~ ASN::StringWrapper ?? $type.new($_) !! $_, :$debug, :$mode) for @($sequence.seq);
-        };
+        my $type = $sequence.type;
+        my $res;
+        $res.push: self.serialize($type ~~ ASN::StringWrapper ?? $type.new($_) !! $_, :$debug, :$mode) for @($sequence.seq);
+        $res //= Buf.new;
         self!pack($index, [~] $res);
     }
 
