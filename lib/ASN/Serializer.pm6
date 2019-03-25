@@ -91,9 +91,9 @@ class ASN::Serializer {
         say "Encoding SEQUENCE OF with index $index into:" if $debug;
         my $type = $sequence.type;
         my $res;
-        $res.push: self.serialize($type ~~ ASN::StringWrapper ?? $type.new($_) !! $_, :$debug, :$mode) for @($sequence.seq);
-        $res //= Buf.new;
-        self!pack($index, [~] $res);
+        $res.push: self.serialize($_, :$debug, :$mode) for @($sequence.seq);
+        $res //= [Buf.new];
+        self!pack($index, [~] |$res);
     }
 
     # SET OF
@@ -115,10 +115,8 @@ class ASN::Serializer {
 
         if $value ~~ Positional {
             my $seq = $value.map({
-                if $asn-node.type ~~ ASN::Types::UTF8String {
-                    ASN::Types::UTF8String.new($_);
-                } elsif $asn-node.type ~~ ASN::Types::OctetString {
-                    ASN::Types::OctetString.new($_);
+                if $asn-node.type ~~ ASN::StringWrapper {
+                    $asn-node.type.new($_);
                 } else {
                     $_;
                 }
