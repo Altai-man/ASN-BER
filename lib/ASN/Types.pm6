@@ -6,7 +6,7 @@ role ASNSequence {
     method ASN-order {...}
 }
 
-role ASNSequenceOf[$type] {
+role ASNSequenceOf[$type] does Positional {
     has $.seq;
 
     method type { $type }

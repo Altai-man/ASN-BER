@@ -152,6 +152,15 @@ class ASN::Serializer {
         my $inner;
         if $value ~~ ASNChoice {
             $inner = self.serialize($value, :$debug, :$mode);
+        } elsif $value ~~ Positional {
+            my $seq = $value.seq.map({
+                if $value.of ~~ ASN::StringWrapper {
+                    $value.of.new($_);
+                } else {
+                    $_;
+                }
+            }).Array;
+            $inner = self.serialize(ASNSequenceOf[$value.of].new(:$seq), -1, :$debug, :$mode);
         } else {
             $inner = self.serialize($value, -1, :$debug, :$mode);
         }

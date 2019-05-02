@@ -212,7 +212,7 @@ class ASN::Parser {
         my $type = @positional.of;
         my @temp;
         self!parse-sequence($input, $type, @temp, :$debug, :$mode);
-        @positional.new(@temp);
+        @positional.new(seq => @temp);
     }
 
     multi method parse(Buf $input is rw, Int $type where $type.HOW ~~ Metamodel::ClassHOW, :$debug) {
