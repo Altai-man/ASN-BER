@@ -1,19 +1,21 @@
 {
-    "license": "Artistic-2.0",
-    "source-url": "https://github.com/Altai-man/ASN-BER.git",
-    "depends": [],
-    "auth": "github:Altai-man",
-    "provides": {
-        "ASN::Types": "lib/ASN/Types.pm6",
-        "ASN::Parser": "lib/ASN/Parser.pm6",
-        "ASN::Serializer::Async": "lib/ASN/Serializer/Async.pm6",
-        "ASN::Serializer": "lib/ASN/Serializer.pm6",
-        "ASN::Parser::Async": "lib/ASN/Parser/Async.pm6"
-    },
-    "name": "ASN::BER",
-    "description": "ASN.1 BER encoding and decoding tool",
-    "resources": [],
-    "perl": "6.c",
-    "version": "0.6.1",
-    "authors": ["Alexander Kiryuhin <alexander.kiryuhin@gmail.com>"]
+  "name": "ASN::BER",
+  "description": "ASN.1 BER encoding and decoding tool",
+  "version": "0.7.0",
+  "perl": "6.c",
+  "authors": [
+    "Alexander Kiryuhin <alexander.kiryuhin@gmail.com>"
+  ],
+  "auth": "github:Altai-man",
+  "depends": [],
+  "provides": {
+    "ASN::Parser": "lib/ASN/Parser.pm6",
+    "ASN::Parser::Async": "lib/ASN/Parser/Async.pm6",
+    "ASN::Serializer": "lib/ASN/Serializer.pm6",
+    "ASN::Serializer::Async": "lib/ASN/Serializer/Async.pm6",
+    "ASN::Types": "lib/ASN/Types.pm6"
+  },
+  "resources": [],
+  "license": "Artistic-2.0",
+  "source-url": "https://github.com/Altai-man/ASN-BER.git"
 }
