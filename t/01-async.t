@@ -15,10 +15,10 @@ class Rocket does ASNSequence {
     has Str $.message is UTF8String is default-value("Hello World") is optional;
     has Fuel $.fuel;
     has SpeedChoice $.speed is optional;
-    has Str @.payload is UTF8String;
+    has ASNSequenceOf[ASN::Types::UTF8String] $.payload;
 
     method ASN-order() {
-        <$!name $!message $!fuel $!speed @!payload>
+        <$!name $!message $!fuel $!speed $!payload>
     }
 }
 

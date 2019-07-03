@@ -16,10 +16,10 @@ class Rocket does ASNSequence {
     has Str $.message is UTF8String is default-value("Hello World") is optional;
     has Fuel $.fuel;
     has SpeedChoice $.speed is optional;
-    has Str @.payload is UTF8String;
+    has ASNSequenceOf[ASN::Types::UTF8String] $.payload;
 
     method ASN-order() {
-        <$!name $!message $!fuel $!speed @!payload>
+        <$!name $!message $!fuel $!speed $!payload>
     }
 }
 
@@ -47,7 +47,7 @@ my $rocket = Rocket.new(
         name => 'Falcon',
         fuel => Solid,
         speed => SpeedChoice.new((mph => 18000)),
-        payload => ["Car", "GPS"]
+        payload => ASNSequenceOf[ASN::Types::UTF8String].new(seq => ["Car", "GPS"])
 );
 
 is-deeply ASN::Serializer.serialize($rocket, :mode(Implicit)), $rocket-ber, "Correctly serialized a Rocket in implicit mode";
