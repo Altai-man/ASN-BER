@@ -24,9 +24,9 @@ class ASN::Parser {
         my @params = do gather {
             for $type.ASN-order.kv -> $i, $field {
                 if $input.elems == 0 {
-                    my $remain = $type.ASN-order[$i .. *].map(-> $attr {$type.^attributes.grep({$_.name eq $attr})[0]});
+                    my $remain = $type.ASN-order[$i .. *].map(-> $attr {$type.^attributes.grep({$_.name eq $attr})[0]}).Array;
                     unless $remain.map({ $_ ~~ Optional|DefaultValue }).all {
-                        die "Part of content is missing";
+                        die "Part of content is missing for $remain";
                     }
                     last;
                 }
@@ -77,31 +77,29 @@ class ASN::Parser {
         $tag-to-be !~~ $tag;
     }
 
-    method !parse-sequence(Buf $input is rw, $type, $holder, :$debug, :$mode) {
+    method !parse-sequence(Buf $input is rw, $type, :$debug, :$mode) {
+        my @parts;
         while $input.elems != 0 {
             my $tag = self.get-tag($input);
             my $len = self.get-length($input);
             my $piece-bytes = $input.subbuf(0, $len);
             $input .= subbuf($len);
-            $holder.push: self!post-process(self.parse($piece-bytes, $type, :$tag, :$debug, :$mode));
+            @parts.push: self!post-process(self.parse($piece-bytes, $type, :$tag, :$debug, :$mode));
         }
-        $holder;
+        @parts;
+
     }
 
-    multi method parse(Buf $input is rw, ASNSequenceOf $type, :$debug, :$mode) {
-        say "Parsing ASNSequenceOf of $type.type().perl()" if $debug;
-        my $of = $type.type;
-        $of = Str if $of ~~ ASN::StringWrapper;
-        my Positional[$of] $values = Array[$of].new;
-        self!parse-sequence($input, $type.type, $values, :$debug, :$mode);
-        $values;
+    multi method parse(Buf $input is rw, $type where ASNSequenceOf, :$debug, :$mode) {
+        say "Parsing $type.^name() of $type.type().^name()" if $debug;
+        my $of = $_ === Any ?? Blob !! $_ given $type.type;
+        $type.new(seq => self!parse-sequence($input, $of, :$debug, :$mode));
     }
 
     multi method parse(Buf $input is rw, ASNSetOf $type, :$debug, :$mode) {
-        note "Parsing ASNSetOf of $type.type().perl()" if $debug;
-        my Array $set .= new;
-        self!parse-sequence($input, $type.type, $set, :$debug, :$mode);
-        $type.new(|$set);
+        say "Parsing ASNSetOf of $type.type().perl()" if $debug;
+        my $of = $_ === Any ?? Blob !! $_ given $type.type;
+        $type.new(|self!parse-sequence($input, $of, :$debug, :$mode));
     }
 
     multi method parse(Buf $input is rw, ASNChoice $choice, :$tag, :$debug, :$mode) {
@@ -116,7 +114,6 @@ class ASN::Parser {
         } else {
             # Universal tag
         }
-
         my $item = $choice.ASN-choice.grep({ (.value ~~ Pair ?? .value.key !! .value.ASN-tag-value) eq $item-index })[0];
         my $value-type = $item.value ~~ Pair ?? $item.value.value !! $item.value;
 
@@ -126,7 +123,8 @@ class ASN::Parser {
             my $length = self.get-length($input);
         }
 
-        $choice.new(Pair.new($item.key, self.parse($input, $value-type, tag => $choice-index, :$debug, :$mode)));
+        my $result = self.parse($input, $value-type, tag => $choice-index, :$debug, :$mode);
+        $choice.new(Pair.new($item.key, $result));
     }
 
     multi method parse(Buf $input is rw, ASNValue $value, :$debug, :$mode) {
@@ -208,13 +206,6 @@ class ASN::Parser {
         ~("$name" ~~ / \w .+ /)
     }
 
-    multi method parse(Buf $input is rw, @positional, :$debug, :$mode) {
-        my $type = @positional.of;
-        my @temp;
-        self!parse-sequence($input, $type, @temp, :$debug, :$mode);
-        @positional.new(seq => @temp);
-    }
-
     multi method parse(Buf $input is rw, Int $type where $type.HOW ~~ Metamodel::ClassHOW, :$debug) {
         my $total = 0;
         for (0, 8 ... *) Z @$input.reverse -> ($shift, $byte) {
@@ -230,10 +221,9 @@ class ASN::Parser {
         $str.new($decoded);
     }
 
-    multi method parse(Buf $input is rw, ASN::Types::OctetString $str, :$debug) {
-        my $decoded = $input.decode;
-        say "Parsing `$decoded.perl()` out of $input.perl()" if $debug;
-        $str.new($decoded);
+    multi method parse(Buf $input is rw, $str where Blob|ASN::Types::OctetString, :$debug) {
+        say "Parsing OCTET STRING of $input.perl()" if $debug;
+        $str.new(Blob.new($input));
     }
 
     multi method parse(Buf $input is rw, Bool $bool, :$debug, :$mode) {
