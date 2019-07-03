@@ -12,7 +12,7 @@ class ASN::Serializer {
         my $int-encoded = Buf.new;
         my $bit-shift-value = 0;
         my $bit-shift-mask = 0xff;
-        while True {
+        loop {
             my $byte = $int +& $bit-shift-mask +> $bit-shift-value;
             if $byte == 0 {
                 $int-encoded.append(0) if $int-encoded.elems == 0;
@@ -28,12 +28,24 @@ class ASN::Serializer {
         self!pack($index, $int-encoded.reverse);
     }
 
+    # Blob, the same as OctetString, but for choices
+    multi method serialize(Blob $str, Int $index = 4, :$debug) {
+        self.serialize(ASN::Types::OctetString.new($str), $index, :$debug);
+    }
+
     # OctetString
     multi method serialize(ASN::Types::OctetString $str, Int $index = 4, :$debug) {
-        my $value-cut = $str.value.substr(0, 10);
-        my $buf =  $str.value.encode;
-        say "Encoding OctetString ({ $buf.elems > 10 ?? "$value-cut..." !! $value-cut }) with index $index" if $debug;
-        self!pack($index, $buf);
+        my $value = $str.value;
+        if $value ~~ Blob {
+            my $value-cut = $value.subbuf(0, 10);
+            say "Encoding OctetString out of Blob ({ $value.elems > 10 ?? "$value-cut.perl()..." !! $value-cut.perl() }) with index $index" if $debug;
+            self!pack($index, $value);
+        } elsif $value ~~ Str {
+            my $value-cut = $value.substr(0, 10);
+            my $buf =  $value.encode;
+            say "Encoding OctetString out of Str ({ $value.chars > 10 ?? "$value-cut..." !! $value-cut }) with index $index" if $debug;
+            self!pack($index, $buf);
+        }
     }
 
     # NULL
@@ -91,7 +103,11 @@ class ASN::Serializer {
         say "Encoding SEQUENCE OF with index $index into:" if $debug;
         my $type = $sequence.type;
         my $res;
-        $res.push: self.serialize($_, :$debug, :$mode) for @($sequence.seq);
+        for $sequence.seq<> {
+            my $value = $type === Any && $_ ~~ Str ?? Blob.new($_.encode) !! $_;
+            $value = $type ~~ ASN::StringWrapper ?? $type.new($value) !! $value;
+            $res.push: self.serialize($value, :$debug, :$mode);
+        }
         $res //= [Buf.new];
         self!pack($index, [~] |$res);
     }
@@ -114,7 +130,7 @@ class ASN::Serializer {
 
         # Don't serialize undefined values of type with a default
         return Buf.new if $asn-node.default eqv $value;
-        return self.serialize($asn-node.type.new($value), |($_ + 128 with $asn-node.tag) :$debug, :$mode) if $value ~~ Str;
+        return self.serialize($asn-node.type.new($value), |($_ + 128 with $asn-node.tag) :$debug, :$mode) if $value ~~ Str|Blob;
 
         if $value ~~ Positional {
             my $seq = $value.map({
@@ -152,17 +168,24 @@ class ASN::Serializer {
         my $inner;
         if $value ~~ ASNChoice {
             $inner = self.serialize($value, :$debug, :$mode);
-        } elsif $value ~~ Positional {
+        } elsif $value ~~ ASNSequenceOf {
             my $seq = $value.seq.map({
-                if $value.of ~~ ASN::StringWrapper {
-                    $value.of.new($_);
+                if $value.type ~~ ASN::StringWrapper {
+                    $value.type.new($_);
                 } else {
                     $_;
                 }
             }).Array;
-            $inner = self.serialize(ASNSequenceOf[$value.of].new(:$seq), -1, :$debug, :$mode);
+            $inner = self.serialize(ASNSequenceOf[$value.type].new(:$seq), -1, :$debug, :$mode);
         } else {
-            $inner = self.serialize($value, -1, :$debug, :$mode);
+            my $value-to-encode;
+            if $choice-item ~~ Pair {
+                $value-to-encode = $choice-item.value !=== Blob ?? $value !!
+                        $value ~~ Str ?? Blob.new($value.encode) !! $value;
+            } else {
+                $value-to-encode = $value;
+            }
+            $inner = self.serialize($value-to-encode, -1, :$debug, :$mode);
         }
         say "Encoding ASNChoice by $description.perl() with value: $value.perl()" if $debug;
         Buf.new(|($index == -1 ?? () !! ($index, |self!calculate-len($inner))), |$inner);
