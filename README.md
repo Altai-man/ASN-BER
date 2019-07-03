@@ -53,12 +53,12 @@ class Rocket does ASNType {
     has Str $.message is default-value("Hello World") is UTF8String; # DEFAULT
     has Fuel $.fuel; # ENUMERATED
     has SpeedChoice $.speed is optional; # CHOICE + OPTIONAL
-    has Str @.payload is UTF8String; # SEQUENCE OF UTF8String
+    has ASNSequenceOf[ASN::Types::UTF8String] $.payload # SEQUENCE OF UTF8String
 
     # `ASN-order` method is a single _necessary_ method
     # which describes an order of attributes of type (here - SEQUENCE) to be encoded/decoded
     method ASN-order() {
-        <$!name $!message $!fuel $!speed @!payload>
+        <$!name $!message $!fuel $!speed $!payload>
     }
 }
 
@@ -66,7 +66,7 @@ my $rocket = Rocket.new(
         name => 'Falcon',
         fuel => Solid,
         speed => SpeedChoice.new((mph => 18000)),
-        payload => ["Car", "GPS"]
+        payload => ASNSequenceOf[ASN::Types::UTF8String].new(seq => ["Car", "GPS"])
 );
 
 say ASN::Serializer.serialize($rocket, :mode(Implicit)); # for now only IMPLICIT tag schema is supported and flag is not really used
@@ -86,8 +86,6 @@ say ASN::Parser.new(:type(Rocket)).parse($rocket-encoding-result, :mode(Implicit
 ```
 
 #### ASN.1 "traits" handling rules
-
-**This part is a design draft that might be changed in case if any issue that hinders development of LDAP will de discovered**
 
 The main concept is to avoid unnecessary creation of new types that just serve as envelopes for
 actual data and avoid boilerplate related to using such intermediate types. Hence, when possible,
@@ -111,13 +109,13 @@ Universal types are mostly handled with Perl 6 native types, currently implement
 | BOOLEAN         | Bool                           |
 | INTEGER         | Int                            |
 | NULL            | ASN-Null                       |
-| OCTET STRING    | Str                            |
+| OCTET STRING    | Blob or Str                    |
 | UTF8String      | Str                            |
 | ENUMERATED      | enum                           |
 | SEQUENCE        | class implementing ASNSequence |
-| SEQUENCE OF Foo | Foo @.sequence                 |
+| SEQUENCE OF Foo | ASNSequenceOf\[Foo\]           |
 | SET OF Foo      | ASNSetOf\[Foo\]                |
-| CHOICE          | ASNChioce                      |
+| CHOICE          | ASNChoice                      |
 
 * User defined types (`LDAPDN ::= LDAPString`)
 
@@ -131,7 +129,7 @@ LDAPDN ::= LDAPString
 results in
 
 ```perl6
-has Str $.ldapdn is OctetString; # Ignore level of indirectness in type
+has $.ldapdn is OctetString; # Ignore level of indirectness in type
 ```
 
 One can inherit a class from `ASN::BER`'s types to make structure more strict if needed.
@@ -144,7 +142,7 @@ They are handled correctly if nested, so `a ::= SEQUENCE { ..., b SEQUENCE {...}
 
 * SEQUENCE OF elements
 
-Array sigil may be used `has Foo @.foos`. In future, possibly more generic way of writing will be provided.
+Such elements are implemented using `ASNSequenceOf` role with type parameter being type of sequence.
 
 * SET elements (`Foo ::= SET {}`)
 
