@@ -118,7 +118,11 @@ class ASN::Serializer {
         say "Encoding SET OF with index $index into:" if $debug;
         my $type = $set.type;
         my $res;
-        $res.push: self.serialize($type ~~ ASN::StringWrapper ?? $type.new($_) !! $_, :$debug, :$mode) for $set.keys;
+        for $set.keys {
+            my $value = $type === Any && $_ ~~ Str ?? Blob.new($_.encode) !! $_;
+            $value = $type ~~ ASN::StringWrapper ?? $type.new($value) !! $value;
+            $res.push: self.serialize($value, :$debug, :$mode);
+        }
         $res //= [Buf.new];
         self!pack($index, [~] |$res);
     }
