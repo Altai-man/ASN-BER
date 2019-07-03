@@ -6,7 +6,7 @@ role ASNSequence {
     method ASN-order {...}
 }
 
-role ASNSequenceOf[$type] does Positional {
+role ASNSequenceOf[$type] {
     has $.seq;
 
     method type { $type }
@@ -35,9 +35,10 @@ class ASN-Null {}
 
 # String traits
 role ASN::StringWrapper {
-    has Str $.value;
+    my subset OctetStringUtility where Str|Blob;
+    has OctetStringUtility $.value;
 
-    method new(Str $value) { self.bless(:$value) }
+    method new($value where Str|Blob) { self.bless(:$value) }
 }
 
 role ASN::Types::UTF8String does ASN::StringWrapper {}
@@ -87,4 +88,4 @@ class ASNValue {
 
 our $primitive-type is export =
         Int | Str | Bool |
-        ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null;
+        ASN::Types::UTF8String | ASN::Types::OctetString | ASN-Null | Blob;
