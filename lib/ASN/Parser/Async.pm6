@@ -4,8 +4,9 @@ class ASN::Parser::Async {
     has Supplier::Preserving $!out = Supplier::Preserving.new;
     has Supply $!values = $!out.Supply;
     has Buf $!buffer = Buf.new;
-    has ASN::Parser $!parser = ASN::Parser.new(type => $!type);
+    has ASN::Parser $!parser = ASN::Parser.new(:$!type);
     has $.type;
+    has $!debug = so %*ENV<ASN_BER_PARSER_DEBUG>;
 
     method values(--> Supply) {
         $!values;
@@ -22,7 +23,7 @@ class ASN::Parser::Async {
             my $length = $!parser.get-length($!buffer);
             # Tag and length are already cut down here, take only value
             my $item-octets = $!buffer.subbuf(0, $length);
-            $!out.emit: $!parser.parse($item-octets, :!to-chop);
+            $!out.emit: $!parser.parse($item-octets, :$!debug, :!to-chop);
             $!buffer .= subbuf($length);
         }
     }

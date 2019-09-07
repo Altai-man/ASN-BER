@@ -4,13 +4,14 @@ class ASN::Serializer::Async {
     has Supplier::Preserving $!out = Supplier::Preserving.new;
     has Supply $!bytes = $!out.Supply;
     has ASN::Serializer $!serializer = ASN::Serializer.new;
+    has $!debug = so %*ENV<ASN_BER_SERIALIZER_DEBUG>;
 
     method bytes(--> Supply) {
         $!out;
     }
 
     method process($value) {
-        $!out.emit: $!serializer.serialize($value);
+        $!out.emit: $!serializer.serialize($value, :$!debug);
     }
 
     method close() {
