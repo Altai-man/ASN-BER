@@ -48,7 +48,7 @@ class SpeedChoice does ASNChoice {
 }
 
 # Mark our SEQUENCE as ASNSequence
-class Rocket does ASNType {
+class Rocket does ASNSequence {
     has Str $.name is UTF8String; # UTF8String
     has Str $.message is default-value("Hello World") is UTF8String; # DEFAULT
     has Fuel $.fuel; # ENUMERATED
