@@ -245,3 +245,8 @@ Apply `is optional` trait to an attribute.
 ##### Default
 
 Apply `is default-value` trait to an attribute. It additionally sets `is default` trait with the same value.
+
+#### Debugging
+
+You can set environment variables `ASN_BER_PARSER_DEBUG` and `ASN_BER_SERIALIZER_DEBUG`
+to print parser's and serializer's debug output respectively.
