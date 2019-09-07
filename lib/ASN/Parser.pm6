@@ -6,7 +6,7 @@ class ASN::Parser {
     method is-complete(Blob $input is copy --> Bool) {
         my $tag = self.get-tag($input);
         my $len = self.get-length($input);
-        $len <= $input.elems;
+        $len != -1 && $len <= $input.elems;
     }
 
     multi method parse(Blob $input, :$debug, :$mode, :$to-chop = True) {
@@ -147,9 +147,20 @@ class ASN::Parser {
             $input .= subbuf(1) unless $immutable;
             return $length;
         } else {
-            my $octets = $input.subbuf(1, $length - 128);
-            $input .= subbuf($length - 127) unless $immutable;
-            return self.parse($octets, Int);
+            my $num-of-octets = $length - 128;
+            # If the buffer has not enough bytes (excluding first one,
+            # indicating short/long forms), return Inf, which will always be incomplete
+            if $input.elems - 1 < $num-of-octets {
+                return -1;
+            } else {
+                # Number of length octets is already calculated,
+                # skip the first byte as it defines "length of length",
+                # not the value
+                my $length-octets = $input.subbuf(1, $num-of-octets);
+                # Remove those octets and the first byte
+                $input .= subbuf($num-of-octets + 1) unless $immutable;
+                return self.parse($length-octets, Int);
+            }
         }
     }
 
