@@ -218,9 +218,24 @@ class ASN::Parser {
     }
 
     multi method parse(Buf $input is rw, Int $type where $type.HOW ~~ Metamodel::ClassHOW, :$debug) {
-        my $total = 0;
-        for (0, 8 ... *) Z @$input.reverse -> ($shift, $byte) {
-            $total +|= $byte +< $shift;
+        my $v = $input[0];
+        my $neg = $v > 127;
+        my $pad = $neg ?? 255 !! 0;
+
+        $input = Buf.new($input.grep(not * eq $pad));
+        my $total;
+
+        if $input.elems {
+            # Get last byte...
+            $total = $input[*-1];
+            # negate it if it's negative...
+            $total = $total - 256 if $neg;
+            # for all previous bytes, add them with a shift
+            for (8 ... *) Z @$input.reverse[1..*] -> ($shift, $byte) {
+                $total +|= $byte +< $shift;
+            }
+        } else {
+            $total = $neg ?? -1 !! 0;
         }
         say "Parsing $total out of $input.perl()" if $debug;
         $total;
