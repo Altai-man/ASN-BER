@@ -10,19 +10,29 @@ class ASN::Serializer {
     # INTEGER
     multi method serialize(Int $int is copy where $int.HOW ~~ Metamodel::ClassHOW, Int $index = 2, :$debug, :$mode) {
         my $int-encoded = Buf.new;
-        my $bit-shift-value = 0;
-        my $bit-shift-mask = 0xff;
-        loop {
-            my $byte = $int +& $bit-shift-mask +> $bit-shift-value;
-            if $byte == 0 {
-                $int-encoded.append(0) if $int-encoded.elems == 0;
-                last;
-            }
-            $int-encoded.append($byte);
-            # Update operands
-            $bit-shift-value += 8;
-            $bit-shift-mask +<= 8;
+        my ($is-neg, $limit);
+        if $is-neg = $int < 0 {
+            $int = -$int;
+            $limit = 0x80;
+        } else {
+            $limit = 0x7F;
         }
+
+        while $int > $limit {
+            $int-encoded.append($int +& 0xFF);
+            $int +>= 8;
+        }
+        $int-encoded.append($int +& 0xFF);
+
+        if $is-neg {
+            $int-encoded = Buf.new($int-encoded.map(0xFF - *));
+            for $int-encoded.kv -> $i, $v {
+                $int-encoded[$i] += 1;
+                last if $int-encoded[$i] <= 0xFF;
+                $int-encoded[$i] = 0x0;
+            }
+        }
+        $int-encoded.append(0xFF) if $is-neg && $int-encoded[* - 1] == 0x7F;
 
         say "Encoding Int ($int) with index $index, resulting in $int-encoded.reverse().perl()" if $debug;
         self!pack($index, $int-encoded.reverse);
