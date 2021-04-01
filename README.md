@@ -1,6 +1,6 @@
 ### ASN::BER
 
-This module is designed to allow one make Perl 6 types support encoding and decoding based on ASN.1-driven Basic Encoding Rules.
+This module is designed to allow one make Raku types support encoding and decoding based on ASN.1-driven Basic Encoding Rules.
 
 #### Warnings
 
@@ -102,7 +102,7 @@ Definitions of ASN.1 types are made by use of:
 
 * Universal types (`MessageID ::= INTEGER`)
 
-Universal types are mostly handled with Perl 6 native types, currently implemented are:
+Universal types are mostly handled with Raku native types, currently implemented are:
 
 | ASN.1 type      | Perl 6 type                    |
 |-----------------|--------------------------------|
