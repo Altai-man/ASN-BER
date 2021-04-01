@@ -6,7 +6,7 @@
   "authors": [
     "Alexander Kiryuhin <alexander.kiryuhin@gmail.com>"
   ],
-  "auth": "github:Altai-man",
+  "auth": "zef:Altai-man",
   "depends": [],
   "provides": {
     "ASN::Parser": "lib/ASN/Parser.pm6",
